@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import multer from 'multer';
-import { v4 as uuid } from 'uuid';
 import db, { storeUploadFile, deleteUploadFile } from '../db.js';
 
 const router = Router({ mergeParams: true });
@@ -55,10 +55,9 @@ router.post('/', (req, res) => {
         .get(req.params.patientId);
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
-      const id = uuid();
       const ts = now();
       const ext = path.extname(req.file.originalname) || '';
-      const filename = `${uuid()}${ext}`;
+      const filename = `${randomUUID()}${ext}`;
       const relativePath = `${req.params.patientId}/${filename}`;
       const visitId = req.body.visitId || null;
 
@@ -73,15 +72,22 @@ router.post('/', (req, res) => {
 
       await storeUploadFile(relativePath, req.file.buffer);
 
-      await db
+      const result = await db
         .prepare(
-          `INSERT INTO attachments (id, patient_id, visit_id, relative_path, original_name, mime_type, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO attachments (patient_id, visit_id, relative_path, original_name, mime_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .run(id, req.params.patientId, visitId, relativePath, req.file.originalname, req.file.mimetype, ts);
+        .run(
+          req.params.patientId,
+          visitId,
+          relativePath,
+          req.file.originalname,
+          req.file.mimetype,
+          ts
+        );
 
       await db.prepare('UPDATE patients SET updated_at = ? WHERE id = ?').run(ts, req.params.patientId);
-      const row = await db.prepare('SELECT * FROM attachments WHERE id = ?').get(id);
+      const row = await db.prepare('SELECT * FROM attachments WHERE id = ?').get(result.insertId);
       res.status(201).json(mapAttachment(row));
     } catch (e) {
       res.status(500).json({ error: e.message || 'Upload failed' });

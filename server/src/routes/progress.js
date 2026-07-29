@@ -1,11 +1,17 @@
 import { Router } from 'express';
-import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 
 const router = Router({ mergeParams: true });
 
 function now() {
   return new Date().toISOString();
+}
+
+function toScore(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(10, Math.max(0, n));
 }
 
 function mapLog(row) {
@@ -16,6 +22,8 @@ function mapLog(row) {
     logDate: row.log_date,
     rightEye: row.right_eye,
     leftEye: row.left_eye,
+    rightScore: row.right_score ?? null,
+    leftScore: row.left_score ?? null,
     createdAt: row.created_at,
   };
 }
@@ -33,23 +41,26 @@ router.post('/', async (req, res) => {
   const patient = await db.prepare('SELECT id FROM patients WHERE id = ?').get(req.params.patientId);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const body = req.body || {};
-  const id = uuid();
   const ts = now();
-  await db
+  const result = await db
     .prepare(
-      `INSERT INTO progress_logs (id, patient_id, log_date, right_eye, left_eye, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO progress_logs (
+        patient_id, log_date, right_eye, left_eye, right_score, left_score, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      id,
       req.params.patientId,
       body.logDate || ts.slice(0, 10),
       body.rightEye || null,
       body.leftEye || null,
+      toScore(body.rightScore),
+      toScore(body.leftScore),
       ts
     );
   await db.prepare('UPDATE patients SET updated_at = ? WHERE id = ?').run(ts, req.params.patientId);
-  res.status(201).json(mapLog(await db.prepare('SELECT * FROM progress_logs WHERE id = ?').get(id)));
+  res
+    .status(201)
+    .json(mapLog(await db.prepare('SELECT * FROM progress_logs WHERE id = ?').get(result.insertId)));
 });
 
 router.put('/:logId', async (req, res) => {
@@ -59,11 +70,17 @@ router.put('/:logId', async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Progress log not found' });
   const body = req.body || {};
   await db
-    .prepare(`UPDATE progress_logs SET log_date = ?, right_eye = ?, left_eye = ? WHERE id = ?`)
+    .prepare(
+      `UPDATE progress_logs SET
+        log_date = ?, right_eye = ?, left_eye = ?, right_score = ?, left_score = ?
+       WHERE id = ?`
+    )
     .run(
       body.logDate || existing.log_date,
       body.rightEye ?? existing.right_eye,
       body.leftEye ?? existing.left_eye,
+      body.rightScore !== undefined ? toScore(body.rightScore) : existing.right_score,
+      body.leftScore !== undefined ? toScore(body.leftScore) : existing.left_score,
       req.params.logId
     );
   res.json(mapLog(await db.prepare('SELECT * FROM progress_logs WHERE id = ?').get(req.params.logId)));

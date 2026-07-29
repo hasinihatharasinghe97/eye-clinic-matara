@@ -73,13 +73,15 @@ export function BackupPage() {
         <h2>Backup &amp; Settings</h2>
         {settings?.cloudMode ? (
           <p className="muted">
-            Cloud mode is on. Patient data is stored in the free Turso database. A ZIP backup is created
-            automatically each evening (last 14 kept). Download copies to Google Drive or a phone for extra safety.
+            Cloud mode is on. Patient data is stored in MySQL. Uploads and ZIP backups are kept in the
+            database (ephemeral host disk). A ZIP backup is created automatically each evening (last 14
+            kept). Download copies to Google Drive or a phone for extra safety.
           </p>
         ) : (
           <p className="muted">
-            All patient data lives in a local folder on this PC. Make a ZIP backup regularly and copy it to
-            Google Drive, OneDrive, or a USB stick so records survive PC failure or accidental deletion.
+            All patient data lives in MySQL. Uploads and ZIP backups stay in a local folder on this PC.
+            Make a ZIP backup regularly and copy it to Google Drive, OneDrive, or a USB stick so records
+            survive PC failure or accidental deletion.
           </p>
         )}
         <p className="muted">
@@ -137,13 +139,23 @@ export function BackupPage() {
           <>
             <h3>Backup destination folder</h3>
             <p className="muted">
-              Tip: Install Google Drive for Desktop, then set this path to a folder inside your Drive so backups
-              sync automatically.
+              Leave the project default (<code>data/backups</code>) so it follows this folder on any PC. Or set a
+              path inside Google Drive / OneDrive on <em>this</em> computer so backups sync automatically.
             </p>
             <div className="field">
               <label>Full folder path on this PC</label>
               <input value={backupFolder} onChange={(e) => setBackupFolder(e.target.value)} required />
             </div>
+            {settings?.defaultBackupFolder && backupFolder !== settings.defaultBackupFolder && (
+              <button
+                className="btn secondary"
+                type="button"
+                style={{ marginBottom: '0.75rem' }}
+                onClick={() => setBackupFolder(settings.defaultBackupFolder || '')}
+              >
+                Use project default folder
+              </button>
+            )}
           </>
         )}
 

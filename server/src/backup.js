@@ -4,11 +4,9 @@ import { createWriteStream } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import archiver from 'archiver';
-import { v4 as uuid } from 'uuid';
 import {
   db,
   DATA_DIR,
-  DB_PATH,
   UPLOADS_DIR,
   BACKUPS_DIR,
   IS_CLOUD,
@@ -32,19 +30,12 @@ async function collectZipToBuffer() {
 
   const done = pipeline(archive, pass);
 
-  if (!IS_CLOUD && fs.existsSync(DB_PATH)) {
-    archive.file(DB_PATH, { name: 'patients.db' });
-    for (const suffix of ['-wal', '-shm']) {
-      const p = `${DB_PATH}${suffix}`;
-      if (fs.existsSync(p)) archive.file(p, { name: `patients.db${suffix}` });
-    }
-  }
-
-  // Always include a JSON snapshot so Turso / cloud restores are possible
+  // JSON snapshot is the restore source (MySQL has no portable local db file)
   const patients = await db.prepare('SELECT * FROM patients').all();
   const visits = await db.prepare('SELECT * FROM visits').all();
   const progress = await db.prepare('SELECT * FROM progress_logs').all();
   const attachments = await db.prepare('SELECT * FROM attachments').all();
+  const diseaseAssessments = await db.prepare('SELECT * FROM disease_assessments').all();
   const settings = await getSettings();
 
   archive.append(
@@ -55,6 +46,7 @@ async function collectZipToBuffer() {
         visits,
         progress_logs: progress,
         attachments: attachments.map(({ ...a }) => a),
+        disease_assessments: diseaseAssessments,
         settings: {
           backupFolder: settings.backupFolder,
           lastBackupAt: settings.lastBackupAt,
@@ -122,10 +114,8 @@ export async function createBackup({ persist = true } = {}) {
   if (persist) {
     if (IS_CLOUD) {
       await db
-        .prepare(
-          `INSERT INTO backup_archives (id, zip_name, content, created_at) VALUES (?, ?, ?, ?)`
-        )
-        .run(uuid(), zipName, buffer, createdAt);
+        .prepare(`INSERT INTO backup_archives (zip_name, content, created_at) VALUES (?, ?, ?)`)
+        .run(zipName, buffer, createdAt);
     } else {
       const settings = await getSettings();
       const folder = settings.backupFolder || BACKUPS_DIR;
@@ -149,7 +139,7 @@ export async function listBackups() {
   if (IS_CLOUD) {
     const rows = await db
       .prepare(
-        'SELECT id, zip_name, created_at, length(content) AS size FROM backup_archives ORDER BY created_at DESC'
+        'SELECT id, zip_name, created_at, LENGTH(content) AS size FROM backup_archives ORDER BY created_at DESC'
       )
       .all();
     return rows.map((r) => ({

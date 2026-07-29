@@ -2,6 +2,7 @@ node_modules/
 data/**
 !data/uploads/
 !data/uploads/.gitkeep
+documents/
 dist/
 client/dist/
 server/dist/

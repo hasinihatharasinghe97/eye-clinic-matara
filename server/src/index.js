@@ -9,7 +9,11 @@ import patientsRouter from './routes/patients.js';
 import visitsRouter from './routes/visits.js';
 import progressRouter from './routes/progress.js';
 import attachmentsRouter from './routes/attachments.js';
+import diseaseAssessmentsRouter from './routes/diseaseAssessments.js';
 import systemRouter from './routes/system.js';
+import statsRouter from './routes/stats.js';
+import diseaseFormsRouter from './routes/diseaseForms.js';
+import { migrateCustomPrefixedFormIds } from './migrateCustomFormIds.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3001;
@@ -58,10 +62,13 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/system', systemRouter);
+app.use('/api/stats', statsRouter);
+app.use('/api/disease-forms', diseaseFormsRouter);
 app.use('/api/patients', patientsRouter);
 app.use('/api/patients/:patientId/visits', visitsRouter);
 app.use('/api/patients/:patientId/progress', progressRouter);
 app.use('/api/patients/:patientId/attachments', attachmentsRouter);
+app.use('/api/patients/:patientId/disease-assessments', diseaseAssessmentsRouter);
 
 const clientDist = path.resolve(__dirname, '../../client/dist');
 if (fs.existsSync(clientDist)) {
@@ -78,10 +85,17 @@ app.use((err, _req, res, _next) => {
 });
 
 app.listen(PORT, '0.0.0.0', async () => {
+  try {
+    await migrateCustomPrefixedFormIds();
+  } catch (err) {
+    console.warn('[db] custom form id migration skipped:', err.message || err);
+  }
   const settings = await getSettings();
   console.log(`Eye Clinic API listening on http://0.0.0.0:${PORT}`);
-  console.log(`Mode: ${IS_CLOUD ? 'cloud (Turso)' : 'local SQLite'}`);
+  console.log(
+    `Mode: MySQL${IS_CLOUD ? ' (files stored in DB)' : ' (uploads/backups on disk)'}`
+  );
   console.log(`Backup folder: ${settings.backupFolder}`);
-  console.log('Default login password: clinic123 (change in Backup & Settings)');
+  console.log('Login password: use Backup & Settings (default on first install is clinic123)');
   startDailyBackupScheduler();
 });

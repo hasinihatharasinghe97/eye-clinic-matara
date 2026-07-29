@@ -1,15 +1,27 @@
 services:
   - type: web
     name: eye-clinic
-    runtime: docker
+    runtime: node
     plan: free
+    buildCommand: npm ci && npm ci --prefix server && npm ci --prefix client && npm run build --prefix client
+    startCommand: node server/src/index.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "22"
       - key: CLINIC_PASSWORD
         generateValue: true
-      - key: TURSO_DATABASE_URL
+      - key: STORE_FILES_IN_DB
+        value: "1"
+      - key: MYSQL_HOST
         sync: false
-      - key: TURSO_AUTH_TOKEN
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
         sync: false

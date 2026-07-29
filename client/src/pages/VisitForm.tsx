@@ -7,14 +7,75 @@ import {
   type SlitLampData,
   type Visit,
   type VisionData,
+  type VisualFieldData,
 } from '../api';
+import { emptyVisualField, VisualFieldMarker } from '../components/VisualFieldMarker';
 
 type Props = {
   patientId: string;
   visitId?: string;
+  patientName?: string | null;
   onDone: () => void;
   onCancel: () => void;
 };
+
+const DISTANCE_OPTIONS = [
+  '-',
+  'CFS',
+  'HM',
+  'PL',
+  '6/60',
+  '6/36',
+  '6/24',
+  '6/18',
+  '6/12',
+  '6/9',
+  '6/6',
+];
+
+const NEAR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const COLOR_VISION_OPTIONS = Array.from({ length: 30 }, (_, i) => String(i + 1));
+const CONTRAST_OPTIONS = Array.from({ length: 10 }, (_, i) => String(i + 1));
+
+function parseVisualField(raw: Visit['visualField']): VisualFieldData {
+  if (!raw) return emptyVisualField();
+  if (typeof raw === 'object') {
+    return {
+      r: { tl: false, tr: false, bl: false, br: false, ...raw.r },
+      l: { tl: false, tr: false, bl: false, br: false, ...raw.l },
+      notes: raw.notes || '',
+    };
+  }
+  try {
+    const parsed = JSON.parse(raw) as VisualFieldData;
+    if (parsed && typeof parsed === 'object' && (parsed.r || parsed.l)) {
+      return {
+        r: { tl: false, tr: false, bl: false, br: false, ...parsed.r },
+        l: { tl: false, tr: false, bl: false, br: false, ...parsed.l },
+        notes: parsed.notes || '',
+      };
+    }
+  } catch {
+    /* legacy free-text */
+  }
+  return { ...emptyVisualField(), notes: String(raw) };
+}
+
+function parseIop(raw: Visit['iop']): { r: string; l: string } {
+  if (!raw) return { r: '', l: '' };
+  if (typeof raw === 'object') {
+    return { r: String(raw.r ?? ''), l: String(raw.l ?? '') };
+  }
+  try {
+    const parsed = JSON.parse(raw) as { r?: string; l?: string };
+    if (parsed && typeof parsed === 'object' && ('r' in parsed || 'l' in parsed)) {
+      return { r: String(parsed.r ?? ''), l: String(parsed.l ?? '') };
+    }
+  } catch {
+    /* legacy single IOP string */
+  }
+  return { r: String(raw), l: '' };
+}
 
 type FormState = {
   visitDate: string;
@@ -28,9 +89,9 @@ type FormState = {
   cataract: CataractData;
   ixHistory: string;
   diagnosis: string;
-  iop: string;
+  iop: { r: string; l: string };
   colorVision: string;
-  visualField: string;
+  visualField: VisualFieldData;
   notes: string;
 };
 
@@ -40,19 +101,47 @@ const blank = (): FormState => ({
   ocOther: '',
   familyHistory: '',
   examExternal: {},
-  vision: { distance: {}, near: {} },
+  vision: { distance: {}, near: {}, contrast: {} },
   inspection: {},
   slitLamp: {},
   cataract: {},
   ixHistory: '',
   diagnosis: '',
-  iop: '',
+  iop: { r: '', l: '' },
   colorVision: '',
-  visualField: '',
+  visualField: emptyVisualField(),
   notes: '',
 });
 
-export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+  allowEmpty,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  allowEmpty?: boolean;
+}) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {allowEmpty !== false && <option value="">—</option>}
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }: Props) {
   const [form, setForm] = useState<FormState>(blank);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -69,15 +158,16 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
         vision: {
           distance: v.vision?.distance || {},
           near: v.vision?.near || {},
+          contrast: v.vision?.contrast || {},
         },
         inspection: v.inspection || {},
         slitLamp: v.slitLamp || {},
         cataract: v.cataract || {},
         ixHistory: v.ixHistory || '',
         diagnosis: v.diagnosis || '',
-        iop: v.iop || '',
+        iop: parseIop(v.iop),
         colorVision: v.colorVision || '',
-        visualField: v.visualField || '',
+        visualField: parseVisualField(v.visualField),
         notes: v.notes || '',
       });
     }).catch((err) => setError(err.message));
@@ -88,8 +178,13 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
     setBusy(true);
     setError('');
     try {
-      if (visitId) await api.updateVisit(patientId, visitId, form);
-      else await api.createVisit(patientId, form);
+      const payload = {
+        ...form,
+        iop: JSON.stringify(form.iop),
+        visualField: JSON.stringify(form.visualField),
+      };
+      if (visitId) await api.updateVisit(patientId, visitId, payload);
+      else await api.createVisit(patientId, payload);
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
@@ -101,6 +196,11 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
   return (
     <form className="card" onSubmit={submit}>
       <h2>{visitId ? 'Edit visit' : 'New eye screening visit'}</h2>
+      {patientName && (
+        <p className="muted" style={{ marginTop: '-0.35rem' }}>
+          Patient: <strong>{patientName}</strong>
+        </p>
+      )}
 
       <div className="grid-2">
         <div className="field">
@@ -114,19 +214,35 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
         </div>
         <div className="field">
           <label>Diagnosis</label>
-          <input value={form.diagnosis} onChange={(e) => setForm((f) => ({ ...f, diagnosis: e.target.value }))} />
+          <input
+            value={form.diagnosis}
+            onChange={(e) => setForm((f) => ({ ...f, diagnosis: e.target.value }))}
+            placeholder="e.g. Cataract OU"
+          />
         </div>
         <div className="field wide">
           <label>C/O (Complaints)</label>
-          <textarea value={form.coComplaints} onChange={(e) => setForm((f) => ({ ...f, coComplaints: e.target.value }))} />
+          <textarea
+            value={form.coComplaints}
+            onChange={(e) => setForm((f) => ({ ...f, coComplaints: e.target.value }))}
+            placeholder="e.g. Blurred vision for 3 months"
+          />
         </div>
         <div className="field wide">
           <label>O.C (Other complaints / observations)</label>
-          <textarea value={form.ocOther} onChange={(e) => setForm((f) => ({ ...f, ocOther: e.target.value }))} />
+          <textarea
+            value={form.ocOther}
+            onChange={(e) => setForm((f) => ({ ...f, ocOther: e.target.value }))}
+            placeholder="e.g. Mild photophobia"
+          />
         </div>
         <div className="field wide">
           <label>Family history</label>
-          <input value={form.familyHistory} onChange={(e) => setForm((f) => ({ ...f, familyHistory: e.target.value }))} />
+          <input
+            value={form.familyHistory}
+            onChange={(e) => setForm((f) => ({ ...f, familyHistory: e.target.value }))}
+            placeholder="e.g. Mother — cataract"
+          />
         </div>
       </div>
 
@@ -166,26 +282,23 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
             ['rPh', 'R ph'],
             ['lEye', 'L-Eye'],
             ['lPh', 'L ph'],
-            ['cfs', 'CFS'],
-            ['hm', 'HM'],
-            ['pl', 'PL'],
           ] as const
         ).map(([key, label]) => (
-          <div className="field" key={key}>
-            <label>{label}</label>
-            <input
-              value={form.vision.distance?.[key] || ''}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  vision: {
-                    ...f.vision,
-                    distance: { ...f.vision.distance, [key]: e.target.value },
-                  },
-                }))
-              }
-            />
-          </div>
+          <SelectField
+            key={key}
+            label={label}
+            value={form.vision.distance?.[key] || ''}
+            options={DISTANCE_OPTIONS}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                vision: {
+                  ...f.vision,
+                  distance: { ...f.vision.distance, [key]: v },
+                },
+              }))
+            }
+          />
         ))}
       </div>
 
@@ -199,33 +312,63 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
             ['lPh', 'L ph'],
           ] as const
         ).map(([key, label]) => (
-          <div className="field" key={key}>
-            <label>{label}</label>
-            <input
-              value={form.vision.near?.[key] || ''}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  vision: {
-                    ...f.vision,
-                    near: { ...f.vision.near, [key]: e.target.value },
-                  },
-                }))
-              }
-            />
-          </div>
+          <SelectField
+            key={key}
+            label={label}
+            value={form.vision.near?.[key] || ''}
+            options={NEAR_OPTIONS}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                vision: {
+                  ...f.vision,
+                  near: { ...f.vision.near, [key]: v },
+                },
+              }))
+            }
+          />
         ))}
       </div>
 
+      <h3 className="section-title">Visual field</h3>
+      <VisualFieldMarker
+        value={form.visualField}
+        onChange={(visualField) => setForm((f) => ({ ...f, visualField }))}
+      />
+
       <div className="grid-2" style={{ marginTop: '0.75rem' }}>
-        <div className="field">
-          <label>Visual field</label>
-          <input value={form.visualField} onChange={(e) => setForm((f) => ({ ...f, visualField: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label>Color vision</label>
-          <input value={form.colorVision} onChange={(e) => setForm((f) => ({ ...f, colorVision: e.target.value }))} />
-        </div>
+        <SelectField
+          label="Color vision"
+          value={form.colorVision}
+          options={COLOR_VISION_OPTIONS}
+          onChange={(colorVision) => setForm((f) => ({ ...f, colorVision }))}
+        />
+      </div>
+
+      <h3 className="section-title">Contrast sensitivity</h3>
+      <div className="grid-2">
+        {(
+          [
+            ['rEye', 'R-Eye (1–10)'],
+            ['lEye', 'L-Eye (1–10)'],
+          ] as const
+        ).map(([key, label]) => (
+          <SelectField
+            key={key}
+            label={label}
+            value={form.vision.contrast?.[key] || ''}
+            options={CONTRAST_OPTIONS}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                vision: {
+                  ...f.vision,
+                  contrast: { ...f.vision.contrast, [key]: v },
+                },
+              }))
+            }
+          />
+        ))}
       </div>
 
       <h3 className="section-title">Inspection</h3>
@@ -273,8 +416,26 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
           />
         </div>
         <div className="field">
-          <label>IOP</label>
-          <input value={form.iop} onChange={(e) => setForm((f) => ({ ...f, iop: e.target.value }))} />
+          <label>IOP — Right eye (mmHg)</label>
+          <input
+            type="number"
+            step="any"
+            min="0"
+            placeholder="e.g. 14"
+            value={form.iop.r}
+            onChange={(e) => setForm((f) => ({ ...f, iop: { ...f.iop, r: e.target.value } }))}
+          />
+        </div>
+        <div className="field">
+          <label>IOP — Left eye (mmHg)</label>
+          <input
+            type="number"
+            step="any"
+            min="0"
+            placeholder="e.g. 16"
+            value={form.iop.l}
+            onChange={(e) => setForm((f) => ({ ...f, iop: { ...f.iop, l: e.target.value } }))}
+          />
         </div>
         <div className="field">
           <label>Optic nerve head (disc / cup)</label>
@@ -429,12 +590,12 @@ export function VisitForm({ patientId, visitId, onDone, onCancel }: Props) {
       </div>
 
       {error && <p className="error">{error}</p>}
-      <div className="row" style={{ marginTop: '1rem' }}>
+      <div className="form-actions">
         <button className="btn" type="submit" disabled={busy}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
         <button className="btn secondary" type="button" onClick={onCancel}>
-          Cancel
+          ← Back without saving
         </button>
       </div>
     </form>

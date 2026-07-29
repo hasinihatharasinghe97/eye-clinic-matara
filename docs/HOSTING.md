@@ -1,102 +1,171 @@
 # Free cloud hosting — Eye Clinic Matara
 
-This app can stay on the clinic PC **or** run free on the internet so the doctor can use phone + browser.
+Run the clinic on the internet (phone + browser) at **no monthly cost**, using:
 
-## Recommended free stack
+| Piece | Service | Notes |
+|--------|---------|--------|
+| App (web + API) | [Render](https://render.com) free Web Service | Sleeps after ~15 min idle; cold start ~30–60s |
+| Database | [Aiven free MySQL](https://aiven.io/free-mysql-database) | Always-free, ~1 GB, no credit card |
+| Backups | Built into the app (last 14 ZIPs) | Also download to Google Drive weekly |
 
-| Piece | Service | Cost |
-|--------|---------|------|
-| App (web + API) | [Render](https://render.com) free Web Service | Free (sleeps after ~15 min idle; wakes on visit) |
-| Database | [Turso](https://turso.tech) free libSQL/SQLite | Free (5 GB) |
-| Daily backups | Built into the app (keeps last 14 ZIPs) | Free |
-
-For ~800 patients this fits comfortably on free tiers.
+For ~800 patients this fits if you stay within Aiven’s free disk (~1 GB). Uploads are stored **inside MySQL** on Render (`STORE_FILES_IN_DB=1`).
 
 ---
 
-## Step 1 — Create a free Turso database
+## Step 1 — Create free MySQL on Aiven
 
-1. Sign up at https://turso.tech (GitHub login is fine).
-2. Create a database, e.g. `eye-clinic-matara`.
-3. Copy:
-   - **Database URL** → `TURSO_DATABASE_URL` (looks like `libsql://….turso.io`)
-   - **Auth token** → `TURSO_AUTH_TOKEN`
+1. Sign up at https://aiven.io (no card needed for free tier).
+2. Create a service: **MySQL** → plan **Free**.
+3. When the service is running, open **Overview / Connection information** and copy:
+   - Host → `MYSQL_HOST`
+   - Port → `MYSQL_PORT` (often not `3306` on Aiven)
+   - User → `MYSQL_USER`
+   - Password → `MYSQL_PASSWORD`
+   - Database → `MYSQL_DATABASE` (often `defaultdb`)
+4. Ensure the service accepts connections from the internet (Render has no fixed IP). On free Aiven this is normally the default public hostname + SSL-capable MySQL port.
 
-Optional: upload existing PC data after deploy (see “Migrate data” below).
+The app creates tables automatically on first start. You can also apply [`docs/schema.sql`](schema.sql) manually if you prefer.
 
 ---
 
-## Step 2 — Deploy the app on Render (free)
+## Step 2 — Push code to GitHub
 
-1. Push this project to a free GitHub repository.
-2. Go to https://dashboard.render.com → **New** → **Blueprint**.
-3. Connect the GitHub repo (uses `render.yaml`).
-4. In the service **Environment** tab, set:
+This repo should already be on GitHub. After local changes:
+
+```bat
+git add -A
+git status
+git commit -m "Your message"
+git push origin main
+```
+
+Never commit `.env` (passwords).
+
+---
+
+## Step 3 — Deploy the app on Render (free)
+
+**Important:** Use the **Node** runtime, **not Docker**. Docker on Render often forces a payment card even when “Free” is selected.
+
+1. Go to https://dashboard.render.com → **New** → **Web Service**.
+2. Connect the GitHub repo `eye-clinic-matara` (or your fork).
+3. Set:
+
+| Field | Value |
+|--------|--------|
+| Language / Runtime | **Node** |
+| Branch | `main` |
+| Build Command | `npm ci && npm ci --prefix server && npm ci --prefix client && npm run build --prefix client` |
+| Start Command | `node server/src/index.js` |
+| Instance Type | **Free** |
+
+4. Add environment variables:
 
 | Variable | Value |
 |----------|--------|
-| `TURSO_DATABASE_URL` | from Turso |
-| `TURSO_AUTH_TOKEN` | from Turso |
-| `CLINIC_PASSWORD` | strong clinic password (change from `clinic123`) |
+| `MYSQL_HOST` | from Aiven |
+| `MYSQL_PORT` | from Aiven |
+| `MYSQL_USER` | from Aiven |
+| `MYSQL_PASSWORD` | from Aiven |
+| `MYSQL_DATABASE` | from Aiven (often `defaultdb`) |
+| `STORE_FILES_IN_DB` | `1` |
+| `CLINIC_PASSWORD` | strong clinic password (not `clinic123`) |
+| `NODE_ENV` | `production` |
 
 5. Deploy. Render gives a URL such as `https://eye-clinic-xxxx.onrender.com`.
 
-Open that URL on a phone or PC browser and sign in.
+Open that URL once and wait for the first boot (tables are created). First load after idle may take 30–60 seconds.
 
-First load after idle may take 30–60 seconds (free tier cold start). After that it is normal.
-
----
-
-## Step 3 — Daily backups
-
-The server **automatically creates a ZIP backup every evening** (keeps the last **14**).
-
-From **Backup & Settings** you can:
-
-- Click **Backup now**
-- **Download** any saved ZIP to the phone/PC
-- Copy that ZIP into Google Drive / OneDrive (recommended weekly)
-
-Also download a copy before any big change.
-
-Turso free plan also keeps a short point-in-time window; the app ZIP backups are the main recovery path.
+If Render asks for a card with Node + Free, cancel and keep using the clinic PC (`start-clinic.bat`).
 
 ---
 
-## Step 4 — Use on mobile
+## Step 4 — Copy clinic PC data into the cloud
 
-1. Open the Render URL in Chrome / Safari.
-2. Optional: **Add to Home Screen** for an app-like icon.
-3. Sign in with the clinic password.
+Your live data is in **local MySQL** (not the old SQLite file). Export a snapshot, then import it into Aiven.
 
-The UI is responsive (single-column forms and scrollable tables on small screens).
+### 4a — Export from the clinic PC
 
----
+With local MySQL running and `.env` pointing at the **local** database:
 
-## Migrate data from the clinic PC to Turso
-
-On the PC (with local data already working):
-
-```bat
-cd eye-clinic
-set TURSO_DATABASE_URL=libsql://YOUR-db.turso.io
-set TURSO_AUTH_TOKEN=YOUR_TOKEN
-node scripts/migrate-to-turso.mjs
+```powershell
+cd D:\eye-clinic
+npm run export:snapshot
 ```
 
-This copies patients, visits, progress, attachments, and uploaded files into Turso.
+This writes `data\backups\snapshot.json`.
+
+**Alternative:** In the running local app → **Backup & Settings** → **Backup now** → **Download** the ZIP → unzip and use the `snapshot.json` inside (keep the `uploads\` folder next to it).
+
+### 4b — Import into Aiven (cloud MySQL)
+
+Point `MYSQL_*` at **Aiven**, enable file-in-DB mode, then import:
+
+```powershell
+cd D:\eye-clinic
+
+$env:MYSQL_HOST="YOUR_AIVEN_HOST"
+$env:MYSQL_PORT="YOUR_AIVEN_PORT"
+$env:MYSQL_USER="avnadmin"
+$env:MYSQL_PASSWORD="YOUR_AIVEN_PASSWORD"
+$env:MYSQL_DATABASE="defaultdb"
+$env:STORE_FILES_IN_DB="1"
+
+node scripts/migrate-sqlite-to-mysql.mjs .\data\backups\snapshot.json
+```
+
+- Attachment **files** are read from `data\uploads\` (or from an `uploads\` folder beside the snapshot) and stored in MySQL `attachment_files`.
+- Patient IDs are remapped; run this against an **empty** cloud DB (or accept duplicate patients if you run it twice).
+
+After import, open the Render URL and confirm patients, one attachment, and Backup & Settings.
+
+### Legacy: old SQLite `data/patients.db`
+
+If you still have SQLite and have **not** moved to local MySQL yet:
+
+```powershell
+$env:MYSQL_HOST="..."   # destination (local or Aiven)
+$env:MYSQL_USER="..."
+$env:MYSQL_PASSWORD="..."
+$env:MYSQL_DATABASE="..."
+$env:STORE_FILES_IN_DB="1"   # use when destination is cloud
+npm run migrate:mysql
+```
+
+---
+
+## Step 5 — Daily backups (after go-live)
+
+From **Backup & Settings** on the cloud URL:
+
+- Click **Backup now**
+- **Download** any ZIP to the phone/PC
+- Copy into Google Drive / OneDrive (recommended weekly)
+
+The server also creates an automatic ZIP each evening (keeps the last **14**).
+
+---
+
+## Step 6 — Use on mobile
+
+1. Open the Render URL in Chrome / Safari.
+2. Optional: **Add to Home Screen**.
+3. Sign in with the `CLINIC_PASSWORD` you set on Render.
 
 ---
 
 ## Keep using only the PC (no cloud)
 
-You can still double-click `start-clinic.bat` and use `http://localhost:5173` as before. Cloud variables are optional.
+1. Install [MySQL 8+](https://dev.mysql.com/downloads/mysql/) locally.
+2. Copy `.env.example` → `.env` and set `MYSQL_PASSWORD`.
+3. Double-click `start-clinic.bat` and open `http://localhost:5173`.
 
 ---
 
 ## Security notes
 
-- Change the clinic password after the first cloud deploy.
+- Change the clinic password after the first cloud deploy (`CLINIC_PASSWORD` + Backup & Settings).
 - Do not share the Render URL publicly; treat it like clinic records.
-- Prefer hospital Wi‑Fi or mobile data you trust when entering patient data.
-- Keep at least one backup ZIP outside Turso (Google Drive / USB).
+- Prefer hospital Wi‑Fi or trusted mobile data when entering patient data.
+- Keep at least one backup ZIP outside the server (Google Drive / USB).
+- Never commit `.env` to GitHub.

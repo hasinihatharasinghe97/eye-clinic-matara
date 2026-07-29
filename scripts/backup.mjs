@@ -7,15 +7,17 @@ import archiver from 'archiver';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const dataDir = path.join(root, 'data');
-const dbPath = path.join(dataDir, 'patients.db');
 const uploadsDir = path.join(dataDir, 'uploads');
 const settingsPath = path.join(dataDir, 'settings.json');
+const defaultBackupsDir = path.join(dataDir, 'backups');
 
-let backupFolder = path.join(dataDir, 'backups');
+let backupFolder = defaultBackupsDir;
 try {
   if (fs.existsSync(settingsPath)) {
     const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    if (s.backupFolder) backupFolder = s.backupFolder;
+    if (s.backupFolder && String(s.backupFolder).trim()) {
+      backupFolder = path.resolve(String(s.backupFolder).trim());
+    }
   }
 } catch {
   /* defaults */
@@ -31,11 +33,21 @@ await new Promise((resolve, reject) => {
   output.on('close', resolve);
   archive.on('error', reject);
   archive.pipe(output);
-  if (fs.existsSync(dbPath)) archive.file(dbPath, { name: 'patients.db' });
-  if (fs.existsSync(`${dbPath}-wal`)) archive.file(`${dbPath}-wal`, { name: 'patients.db-wal' });
-  if (fs.existsSync(`${dbPath}-shm`)) archive.file(`${dbPath}-shm`, { name: 'patients.db-shm' });
+  // Prefer the in-app ZIP (includes MySQL snapshot.json). This script only
+  // archives local uploads + settings for a quick offline copy.
   if (fs.existsSync(uploadsDir)) archive.directory(uploadsDir, 'uploads');
   if (fs.existsSync(settingsPath)) archive.file(settingsPath, { name: 'settings.json' });
+  archive.append(
+    JSON.stringify(
+      {
+        note: 'Use Backup & Settings in the app for a full MySQL snapshot.json export.',
+        createdAt: new Date().toISOString(),
+      },
+      null,
+      2
+    ),
+    { name: 'README.txt' }
+  );
   archive.finalize();
 });
 
@@ -46,3 +58,4 @@ if (fs.existsSync(settingsPath)) {
 }
 
 console.log(`Backup created: ${zipPath}`);
+console.log('Tip: use the app Backup & Settings page for a full database snapshot.');

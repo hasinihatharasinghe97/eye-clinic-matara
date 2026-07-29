@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { v4 as uuid } from 'uuid';
 import db from '../db.js';
 
 const router = Router({ mergeParams: true });
@@ -24,6 +23,28 @@ function parseJson(value, fallback = null) {
   }
 }
 
+function asStoredText(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function parseIop(raw) {
+  if (raw == null || raw === '') return { r: '', l: '' };
+  if (typeof raw === 'object') {
+    return { r: String(raw.r ?? ''), l: String(raw.l ?? '') };
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && ('r' in parsed || 'l' in parsed)) {
+      return { r: String(parsed.r ?? ''), l: String(parsed.l ?? '') };
+    }
+  } catch {
+    /* legacy free-text IOP */
+  }
+  return { r: String(raw), l: '' };
+}
+
 function mapVisit(row) {
   if (!row) return null;
   return {
@@ -40,7 +61,7 @@ function mapVisit(row) {
     cataract: parseJson(row.cataract, {}),
     ixHistory: row.ix_history,
     diagnosis: row.diagnosis,
-    iop: row.iop,
+    iop: parseIop(row.iop),
     colorVision: row.color_vision,
     visualField: row.visual_field,
     notes: row.notes,
@@ -76,18 +97,16 @@ router.post('/', async (req, res) => {
     return res.status(404).json({ error: 'Patient not found' });
   }
   const body = req.body || {};
-  const id = uuid();
   const ts = now();
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO visits (
-      id, patient_id, visit_date, co_complaints, oc_other, family_history,
+      patient_id, visit_date, co_complaints, oc_other, family_history,
       exam_external, vision, inspection, slit_lamp, cataract, ix_history,
       diagnosis, iop, color_vision, visual_field, notes, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      id,
       req.params.patientId,
       body.visitDate || ts.slice(0, 10),
       body.coComplaints || null,
@@ -100,15 +119,17 @@ router.post('/', async (req, res) => {
       jsonOrNull(body.cataract ?? {}),
       body.ixHistory || null,
       body.diagnosis || null,
-      body.iop || null,
+      asStoredText(body.iop),
       body.colorVision || null,
-      body.visualField || null,
+      asStoredText(body.visualField),
       body.notes || null,
       ts,
       ts
     );
   await db.prepare('UPDATE patients SET updated_at = ? WHERE id = ?').run(ts, req.params.patientId);
-  res.status(201).json(mapVisit(await db.prepare('SELECT * FROM visits WHERE id = ?').get(id)));
+  res
+    .status(201)
+    .json(mapVisit(await db.prepare('SELECT * FROM visits WHERE id = ?').get(result.insertId)));
 });
 
 router.put('/:visitId', async (req, res) => {
@@ -139,9 +160,9 @@ router.put('/:visitId', async (req, res) => {
       jsonOrNull(body.cataract ?? parseJson(existing.cataract, {})),
       body.ixHistory ?? existing.ix_history,
       body.diagnosis ?? existing.diagnosis,
-      body.iop ?? existing.iop,
+      body.iop !== undefined ? asStoredText(body.iop) : existing.iop,
       body.colorVision ?? existing.color_vision,
-      body.visualField ?? existing.visual_field,
+      body.visualField !== undefined ? asStoredText(body.visualField) : existing.visual_field,
       body.notes ?? existing.notes,
       ts,
       req.params.visitId

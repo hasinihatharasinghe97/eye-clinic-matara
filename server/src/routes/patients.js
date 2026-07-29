@@ -1,13 +1,44 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { v4 as uuid } from 'uuid';
 import db, { UPLOADS_DIR, IS_CLOUD, deleteUploadFile } from '../db.js';
+import { getPatientCharts } from './stats.js';
 
 const router = Router();
 
 function now() {
   return new Date().toISOString();
+}
+
+function parseConditions(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Medicine PDF numbers 1–200 already sent to this patient. */
+function parseMedicinesSent(value) {
+  let list = [];
+  if (Array.isArray(value)) list = value;
+  else if (value) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {
+      list = [];
+    }
+  }
+  const set = new Set();
+  for (const item of list) {
+    const n = Number(item);
+    if (Number.isInteger(n) && n >= 1 && n <= 200) set.add(n);
+  }
+  return [...set].sort((a, b) => a - b);
 }
 
 function mapPatient(row) {
@@ -23,6 +54,8 @@ function mapPatient(row) {
     idNumber: row.id_number,
     address: row.address,
     phone: row.phone,
+    conditions: parseConditions(row.conditions),
+    medicinesSent: parseMedicinesSent(row.medicines_sent),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -60,6 +93,16 @@ router.get('/recent-visits', async (_req, res) => {
   res.json(rows);
 });
 
+router.get('/:id/charts', async (req, res) => {
+  try {
+    const data = await getPatientCharts(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Patient not found' });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not load charts' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Patient not found' });
@@ -69,17 +112,16 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const body = req.body || {};
   if (!body.name?.trim()) return res.status(400).json({ error: 'Name is required' });
-  const id = uuid();
   const ts = now();
-  await db
+  const conditions = Array.isArray(body.conditions) ? body.conditions : [];
+  const result = await db
     .prepare(
       `INSERT INTO patients (
-      id, name, age, gender, registration_date, opd_ad_no, occupation,
-      id_number, address, phone, created_at, updated_at
+      name, age, gender, registration_date, opd_ad_no, occupation,
+      id_number, address, phone, conditions, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      id,
       body.name.trim(),
       body.age ?? null,
       body.gender || null,
@@ -89,10 +131,11 @@ router.post('/', async (req, res) => {
       body.idNumber || null,
       body.address || null,
       body.phone || null,
+      JSON.stringify(conditions),
       ts,
       ts
     );
-  const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(id);
+  const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(result.insertId);
   res.status(201).json(mapPatient(row));
 });
 
@@ -102,11 +145,14 @@ router.put('/:id', async (req, res) => {
   const body = req.body || {};
   if (!body.name?.trim()) return res.status(400).json({ error: 'Name is required' });
   const ts = now();
+  const conditions = Array.isArray(body.conditions)
+    ? body.conditions
+    : parseConditions(existing.conditions);
   await db
     .prepare(
       `UPDATE patients SET
       name = ?, age = ?, gender = ?, registration_date = ?, opd_ad_no = ?,
-      occupation = ?, id_number = ?, address = ?, phone = ?, updated_at = ?
+      occupation = ?, id_number = ?, address = ?, phone = ?, conditions = ?, updated_at = ?
      WHERE id = ?`
     )
     .run(
@@ -119,9 +165,22 @@ router.put('/:id', async (req, res) => {
       body.idNumber || null,
       body.address || null,
       body.phone || null,
+      JSON.stringify(conditions),
       ts,
       req.params.id
     );
+  const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
+  res.json(mapPatient(row));
+});
+
+router.put('/:id/medicines-sent', async (req, res) => {
+  const existing = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Patient not found' });
+  const medicinesSent = parseMedicinesSent(req.body?.medicinesSent);
+  const ts = now();
+  await db
+    .prepare('UPDATE patients SET medicines_sent = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(medicinesSent), ts, req.params.id);
   const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
   res.json(mapPatient(row));
 });
@@ -137,7 +196,7 @@ router.delete('/:id', async (req, res) => {
     await deleteUploadFile(a.relative_path);
   }
   if (!IS_CLOUD) {
-    const dir = path.join(UPLOADS_DIR, req.params.id);
+    const dir = path.join(UPLOADS_DIR, String(req.params.id));
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   }
 

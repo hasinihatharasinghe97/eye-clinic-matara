@@ -7,14 +7,25 @@ Works on the clinic PC and (optionally) for free on the internet so staff can us
 ## Requirements
 
 - [Node.js 22+](https://nodejs.org/) (Node 24 recommended)
+- [MySQL 8+](https://dev.mysql.com/downloads/mysql/) (local or remote)
 - A modern browser (Chrome / Edge / Safari)
 
 ## Quick start (Windows PC)
 
-1. Open the `eye-clinic` folder.
-2. Double-click **`start-clinic.bat`** (first run installs dependencies).
-3. Open **http://localhost:5173**
-4. Sign in with password: **`clinic123`** (change it under Backup & Settings).
+1. Install MySQL and create a database (or let the app create `eye_clinic` on first start).
+2. Set connection env vars (PowerShell example), or edit defaults in `server` startup via `.env.example`:
+
+```powershell
+$env:MYSQL_HOST="127.0.0.1"
+$env:MYSQL_USER="root"
+$env:MYSQL_PASSWORD="root"
+$env:MYSQL_DATABASE="eye_clinic"
+```
+
+3. Open the `eye-clinic` folder.
+4. Double-click **`start-clinic.bat`** (first run installs dependencies).
+5. Open **http://localhost:5173**
+6. Sign in with password: **`clinic123`** (change it under Backup & Settings).
 
 Or from a terminal:
 
@@ -27,15 +38,44 @@ npm run dev
 - UI: http://localhost:5173  
 - API: http://localhost:3001  
 
+If you still have an old SQLite `data/patients.db`, migrate once:
+
+```bat
+npm run migrate:mysql
+```
+
+To export current MySQL data for cloud import:
+
+```bat
+npm run export:snapshot
+```
+
+## Move to another PC (doctor laptop)
+
+1. Install [Node.js 22+](https://nodejs.org/) on the new PC.
+2. Copy the whole `eye-clinic` folder (include the `data` folder so patients and uploads come along).
+3. Optional but safer: delete `node_modules`, `server\node_modules`, and `client\node_modules` on the new PC, then double-click **`start-clinic.bat`** (it reinstalls automatically).
+4. Open **http://localhost:5173** and sign in.
+
+Backup folder and data paths adjust automatically to the new location. If you had set a custom Google Drive path on the old PC, use **Use project default folder** (or pick the new Drive path) under Backup & Settings.
+
 ## Free cloud hosting (phone + web)
 
-No budget hosting is available with:
+No-budget hosting:
 
-- **Render** (free app URL)
-- **Turso** (free cloud database)
-- **Daily ZIP backups** built into the app (last 14 kept + download)
+- **Render** — free app URL  
+- **Aiven free MySQL** — database  
+- **Daily ZIP backups** in the app (last 14 + download)
 
-Follow the step-by-step guide: **[docs/HOSTING.md](docs/HOSTING.md)**
+Step-by-step (including **copy local data to the cloud**): **[docs/HOSTING.md](docs/HOSTING.md)**
+
+```powershell
+# On the clinic PC (local .env):
+npm run export:snapshot
+
+# Then set MYSQL_* to Aiven + STORE_FILES_IN_DB=1 and:
+node scripts/migrate-sqlite-to-mysql.mjs .\data\backups\snapshot.json
+```
 
 After deploy you open one HTTPS link on mobile or desktop — same login password.
 
@@ -54,17 +94,18 @@ After deploy you open one HTTPS link on mobile or desktop — same login passwor
 **On the PC**
 
 ```
+MySQL database (eye_clinic by default)
 data/
-  patients.db      ← patient and visit records
-  uploads/         ← report images
+  uploads/         ← report images (local mode)
   settings.json    ← password, backup folder, last backup time
   backups/         ← default ZIP backup location
 ```
 
 **In the cloud** (after following HOSTING.md)
 
-- Database + uploaded files: Turso
-- ZIP backups: stored in the DB archive table and downloadable from Backup & Settings
+- Database: MySQL
+- Uploaded files + ZIP backups: stored in MySQL when `STORE_FILES_IN_DB=1`
+- ZIP backups are also downloadable from Backup & Settings
 
 ## Backup plan (important)
 
@@ -73,7 +114,7 @@ data/
 3. Keep a copy on Google Drive / OneDrive / USB.
 4. In cloud mode, the app also auto-backs up each evening.
 
-Restore locally: stop the app, unzip into `data/`, start again.
+Restore locally: import `snapshot.json` from a backup ZIP (or restore MySQL from your own dump), restore `uploads/` if present, start again.
 
 ## Default password
 
@@ -85,9 +126,9 @@ Restore locally: stop the app, unzip into `data/`, start again.
 ```
 eye-clinic/
   client/     React (Vite) UI — mobile responsive
-  server/     Express API + SQLite / Turso
-  data/       Local database and uploads (not committed to git)
-  scripts/    Backup + Turso migration helpers
-  docs/       Hosting guide
+  server/     Express API + MySQL
+  data/       Local uploads and settings (not committed to git)
+  scripts/    Backup, MySQL snapshot export, import helpers
+  docs/       Hosting guide + MySQL schema
   start-clinic.bat
 ```

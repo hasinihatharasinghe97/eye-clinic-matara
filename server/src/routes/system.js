@@ -23,7 +23,7 @@ router.get('/settings', async (_req, res) => {
 router.put('/settings', async (req, res) => {
   const body = req.body || {};
   const patch = {};
-  if (!IS_CLOUD && typeof body.backupFolder === 'string' && body.backupFolder.trim()) {
+  if (!IS_CLOUD && typeof body.backupFolder === 'string') {
     patch.backupFolder = body.backupFolder.trim();
   }
   if (typeof body.clinicPassword === 'string' && body.clinicPassword.length >= 4) {

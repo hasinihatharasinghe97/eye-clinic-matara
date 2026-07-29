@@ -9,10 +9,12 @@
     "start": "npm run start --prefix server",
     "build": "npm run build --prefix client && npm run build --prefix server",
     "backup": "node scripts/backup.mjs",
-    "migrate:turso": "node scripts/migrate-to-turso.mjs"
+    "export:snapshot": "node scripts/export-mysql-snapshot.mjs",
+    "migrate:mysql": "node scripts/migrate-sqlite-to-mysql.mjs",
+    "seed:demo": "node scripts/seed-demo-data.mjs",
+    "seed:demo:clear": "node scripts/seed-demo-data.mjs --clear"
   },
   "dependencies": {
-    "@libsql/client": "^0.15.15",
     "archiver": "^7.0.1"
   },
   "devDependencies": {
