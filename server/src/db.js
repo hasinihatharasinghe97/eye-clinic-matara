@@ -58,6 +58,14 @@ const MYSQL_USER = process.env.MYSQL_USER || 'root';
 const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD ?? '';
 const MYSQL_DATABASE = process.env.MYSQL_DATABASE || 'eye_clinic';
 
+/** Enable TLS to MySQL (Aiven, Oracle HeatWave via NLB, etc.). Set MYSQL_SSL=1 or required. */
+const MYSQL_SSL =
+  process.env.MYSQL_SSL === '1' ||
+  process.env.MYSQL_SSL === 'true' ||
+  process.env.MYSQL_SSL === 'required';
+
+const mysqlSslOption = MYSQL_SSL ? { rejectUnauthorized: false } : undefined;
+
 if (!MYSQL_PASSWORD) {
   console.error(`\nMYSQL_PASSWORD is empty.`);
   console.error(`Open ${envPath} and set it on this line (no spaces around =):`);
@@ -87,6 +95,7 @@ async function ensureDatabaseExists() {
       user: MYSQL_USER,
       password: MYSQL_PASSWORD,
       multipleStatements: true,
+      ssl: mysqlSslOption,
     });
     await conn.query(
       `CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`
@@ -125,6 +134,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   enableKeepAlive: true,
+  ssl: mysqlSslOption,
 });
 
 function prepare(sql) {

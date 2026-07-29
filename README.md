@@ -61,23 +61,22 @@ Backup folder and data paths adjust automatically to the new location. If you ha
 
 ## Free cloud hosting (phone + web)
 
-No-budget hosting:
-
-- **Render** — free app URL  
-- **Aiven free MySQL** — database  
-- **Daily ZIP backups** in the app (last 14 + download)
-
-Step-by-step (including **copy local data to the cloud**): **[docs/HOSTING.md](docs/HOSTING.md)**
+| Need | Guide |
+|------|--------|
+| **More storage (Oracle VM)** | **[docs/HOSTING-ORACLE.md](docs/HOSTING-ORACLE.md)** |
+| Quick 1 GB MySQL (Aiven + Render) | [docs/HOSTING.md](docs/HOSTING.md) |
+| Checklist | [docs/DEPLOY-CHECKLIST.md](docs/DEPLOY-CHECKLIST.md) |
 
 ```powershell
-# On the clinic PC (local .env):
+# Export local MySQL, then import on the cloud host:
 npm run export:snapshot
-
-# Then set MYSQL_* to Aiven + STORE_FILES_IN_DB=1 and:
-node scripts/migrate-sqlite-to-mysql.mjs .\data\backups\snapshot.json
+# …set MYSQL_* to the cloud DB…
+node scripts/restore-from-backup.mjs .\data\backups\snapshot.json
+# or a downloaded ZIP:
+node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
 ```
 
-After deploy you open one HTTPS link on mobile or desktop — same login password.
+Backups: **Backup & Settings** → Backup now → Download → Google Drive / USB weekly. The server also auto-backs up when the last copy is stale (~20h).
 
 ## What you can do
 

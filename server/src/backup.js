@@ -15,7 +15,11 @@ import {
   readUploadFile,
 } from './db.js';
 
-const KEEP_BACKUPS = 14;
+/** How many ZIP backups to keep. Cloud default is lower to save MySQL disk. */
+const KEEP_BACKUPS = Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14;
+
+/** Create a backup if last one is older than this many hours (covers Render sleep). */
+const STALE_HOURS = Number(process.env.BACKUP_STALE_HOURS || 20) || 20;
 
 function stampName() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
@@ -30,23 +34,30 @@ async function collectZipToBuffer() {
 
   const done = pipeline(archive, pass);
 
-  // JSON snapshot is the restore source (MySQL has no portable local db file)
   const patients = await db.prepare('SELECT * FROM patients').all();
   const visits = await db.prepare('SELECT * FROM visits').all();
   const progress = await db.prepare('SELECT * FROM progress_logs').all();
   const attachments = await db.prepare('SELECT * FROM attachments').all();
   const diseaseAssessments = await db.prepare('SELECT * FROM disease_assessments').all();
+  let customForms = [];
+  try {
+    customForms = await db.prepare('SELECT * FROM custom_disease_forms').all();
+  } catch {
+    customForms = [];
+  }
   const settings = await getSettings();
 
   archive.append(
     JSON.stringify(
       {
         exportedAt: new Date().toISOString(),
+        version: 2,
         patients,
         visits,
         progress_logs: progress,
         attachments: attachments.map(({ ...a }) => a),
         disease_assessments: diseaseAssessments,
+        custom_disease_forms: customForms,
         settings: {
           backupFolder: settings.backupFolder,
           lastBackupAt: settings.lastBackupAt,
@@ -57,6 +68,27 @@ async function collectZipToBuffer() {
       2
     ),
     { name: 'snapshot.json' }
+  );
+
+  archive.append(
+    [
+      'Eye Clinic Matara — Backup ZIP',
+      '',
+      'Contents:',
+      '  snapshot.json  — full database export (restore source)',
+      '  uploads/       — attached images and PDFs',
+      '',
+      'Restore (empty target MySQL recommended):',
+      '  1. Unzip this file',
+      '  2. Point MYSQL_* at the destination database',
+      '  3. For cloud hosts: set STORE_FILES_IN_DB=1',
+      '  4. node scripts/restore-from-backup.mjs <path-to-this-zip-or-folder>',
+      '',
+      'Also keep a copy on Google Drive / USB — do not rely only on the server.',
+      `Created: ${new Date().toISOString()}`,
+      '',
+    ].join('\n'),
+    { name: 'README-RESTORE.txt' }
   );
 
   if (!IS_CLOUD && fs.existsSync(UPLOADS_DIR)) {
@@ -185,21 +217,38 @@ export async function getBackupBuffer(id) {
   return { zipName: safe, buffer: fs.readFileSync(full) };
 }
 
+export function isBackupStale(lastBackupAt, now = Date.now()) {
+  if (!lastBackupAt) return true;
+  const t = Date.parse(lastBackupAt);
+  if (Number.isNaN(t)) return true;
+  return now - t > STALE_HOURS * 60 * 60 * 1000;
+}
+
 let lastAutoDate = null;
 
 export function startDailyBackupScheduler() {
   const tick = async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    if (lastAutoDate === today) return;
-    const hour = new Date().getHours();
-    // Run shortly after midnight local server time (clinic end-of-day friendly: also allow 18–23)
-    if (hour < 18 && hour > 2) return;
     try {
       const settings = await getSettings();
+      const today = new Date().toISOString().slice(0, 10);
+      const hour = new Date().getHours();
+
+      // If last backup is stale (e.g. Render slept through evening), back up on wake.
+      if (isBackupStale(settings.lastBackupAt)) {
+        await createBackup({ persist: true });
+        lastAutoDate = today;
+        console.log(`[backup] Stale/missing backup refreshed for ${today}`);
+        return;
+      }
+
+      if (lastAutoDate === today) return;
       if (settings.lastBackupAt?.startsWith(today)) {
         lastAutoDate = today;
         return;
       }
+      // Evening window (local server time) for a second copy on always-on hosts
+      if (hour < 18 && hour > 2) return;
+
       await createBackup({ persist: true });
       lastAutoDate = today;
       console.log(`[backup] Daily backup completed for ${today}`);
@@ -208,7 +257,6 @@ export function startDailyBackupScheduler() {
     }
   };
 
-  // Check every 30 minutes
   setInterval(tick, 30 * 60 * 1000);
-  setTimeout(tick, 15_000);
+  setTimeout(tick, 20_000);
 }

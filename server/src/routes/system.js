@@ -5,7 +5,7 @@ import {
   IS_CLOUD,
   BACKUPS_DIR,
 } from '../db.js';
-import { createBackup, listBackups, getBackupBuffer } from '../backup.js';
+import { createBackup, listBackups, getBackupBuffer, isBackupStale } from '../backup.js';
 
 const router = Router();
 
@@ -17,6 +17,8 @@ router.get('/settings', async (_req, res) => {
     hasPassword: Boolean(s.clinicPassword),
     cloudMode: IS_CLOUD,
     defaultBackupFolder: BACKUPS_DIR,
+    backupOverdue: isBackupStale(s.lastBackupAt),
+    backupKeepCount: Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14,
   });
 });
 
@@ -36,6 +38,8 @@ router.put('/settings', async (req, res) => {
     hasPassword: Boolean(next.clinicPassword),
     cloudMode: IS_CLOUD,
     defaultBackupFolder: BACKUPS_DIR,
+    backupOverdue: isBackupStale(next.lastBackupAt),
+    backupKeepCount: Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14,
   });
 });
 

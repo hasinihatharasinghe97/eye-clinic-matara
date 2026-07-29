@@ -59,7 +59,9 @@ export function BackupPage() {
       }
       const result = await api.backup();
       await refresh();
-      setMessage(`Backup created: ${result.zipName} (${formatSize(result.size)}). You can download it below.`);
+      setMessage(
+        `Backup created: ${result.zipName} (${formatSize(result.size)}). Download it below and copy to Google Drive / USB.`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Backup failed');
     } finally {
@@ -67,26 +69,32 @@ export function BackupPage() {
     }
   }
 
+  const keep = settings?.backupKeepCount ?? (settings?.cloudMode ? 7 : 14);
+
   return (
     <>
       <div className="card">
         <h2>Backup &amp; Settings</h2>
         {settings?.cloudMode ? (
           <p className="muted">
-            Cloud mode is on. Patient data is stored in MySQL. Uploads and ZIP backups are kept in the
-            database (ephemeral host disk). A ZIP backup is created automatically each evening (last 14
-            kept). Download copies to Google Drive or a phone for extra safety.
+            Cloud mode: patient data, uploads, and the last {keep} ZIP backups are stored in MySQL.
+            The server also creates a backup automatically when the last one is older than ~20 hours
+            (important on free hosts that sleep). Always download a copy to Google Drive or USB —
+            do not rely only on the cloud database.
           </p>
         ) : (
           <p className="muted">
-            All patient data lives in MySQL. Uploads and ZIP backups stay in a local folder on this PC.
-            Make a ZIP backup regularly and copy it to Google Drive, OneDrive, or a USB stick so records
-            survive PC failure or accidental deletion.
+            Patient data is in MySQL. Uploads and ZIP backups stay on this PC (last {keep} kept).
+            Back up regularly and copy ZIPs to Google Drive, OneDrive, or USB so records survive PC
+            failure.
           </p>
         )}
         <p className="muted">
           Last backup:{' '}
           {settings?.lastBackupAt ? new Date(settings.lastBackupAt).toLocaleString() : 'Never'}
+          {settings?.backupOverdue ? (
+            <span className="error"> — overdue: click Backup now, then Download latest</span>
+          ) : null}
         </p>
         <div className="row">
           <button className="btn" type="button" onClick={runBackup} disabled={busy}>
@@ -98,6 +106,34 @@ export function BackupPage() {
             </a>
           )}
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Offsite backup (required)</h3>
+        <ol className="muted" style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+          <li>Click <strong>Backup now</strong>, then <strong>Download latest</strong>.</li>
+          <li>Save the ZIP into Google Drive / OneDrive / a USB stick (weekly at minimum).</li>
+          <li>
+            Keep at least two copies in different places (example: Drive + USB at the hospital).
+          </li>
+        </ol>
+      </div>
+
+      <div className="card">
+        <h3>How to restore</h3>
+        <p className="muted">
+          Each ZIP contains <code>snapshot.json</code>, <code>uploads/</code>, and{' '}
+          <code>README-RESTORE.txt</code>. On a PC with Node + this project:
+        </p>
+        <pre className="code-block" style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
+{`# Point MYSQL_* at the destination (empty DB preferred)
+$env:STORE_FILES_IN_DB="1"   # cloud only
+node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
+        </pre>
+        <p className="muted">
+          Full hosting and restore steps: see <code>docs/HOSTING.md</code> and{' '}
+          <code>docs/HOSTING-ORACLE.md</code> in the project.
+        </p>
       </div>
 
       <div className="card">
@@ -139,8 +175,9 @@ export function BackupPage() {
           <>
             <h3>Backup destination folder</h3>
             <p className="muted">
-              Leave the project default (<code>data/backups</code>) so it follows this folder on any PC. Or set a
-              path inside Google Drive / OneDrive on <em>this</em> computer so backups sync automatically.
+              Leave the project default (<code>data/backups</code>) so it follows this folder on any PC. Or
+              set a path inside Google Drive / OneDrive on <em>this</em> computer so backups sync
+              automatically.
             </p>
             <div className="field">
               <label>Full folder path on this PC</label>

@@ -1,52 +1,64 @@
-# Cloud deploy checklist (do these on your accounts)
+# Cloud deploy checklist
 
-Code is already on GitHub: https://github.com/hasinihatharasinghe97/eye-clinic-matara
+Code: https://github.com/hasinihatharasinghe97/eye-clinic-matara  
 
-Full guide: [HOSTING.md](HOSTING.md)
+Guides: [HOSTING.md](HOSTING.md) · [HOSTING-ORACLE.md](HOSTING-ORACLE.md)
 
-## 1) Aiven free MySQL
+---
 
-1. https://aiven.io → create **MySQL Free**
-2. Copy Host, Port, User, Password, Database (`defaultdb` is common)
+## Option 1 — Oracle Always Free VM (more storage) ← recommended
 
-## 2) Render free Web Service
+1. [ ] Oracle Free Tier account → create Ubuntu **Ampere A1** VM with public IP  
+2. [ ] Open ports 22, 80, 443, 3001  
+3. [ ] Install MySQL + Node 22; create DB `eye_clinic`  
+4. [ ] Clone repo; set `.env` (local MySQL; leave `STORE_FILES_IN_DB` off)  
+5. [ ] `npm run install:all` && build client; enable `eye-clinic` systemd service  
+6. [ ] On clinic PC: `npm run export:snapshot` → copy snapshot + uploads to VM → import  
+7. [ ] Backup & Settings → Backup now → Download → Google Drive + USB  
 
-1. https://dashboard.render.com → **New** → **Web Service** (Node, **not** Docker)
-2. Connect repo `eye-clinic-matara`, branch `main`
-3. Build: `npm ci && npm ci --prefix server && npm ci --prefix client && npm run build --prefix client`
-4. Start: `node server/src/index.js`
-5. Env vars:
+Details: [HOSTING-ORACLE.md](HOSTING-ORACLE.md)
+
+---
+
+## Option 2 — Aiven (1 GB) + Render
+
+1. [ ] Aiven free MySQL → copy connection info  
+2. [ ] Render Web Service (Node) → env:
 
 ```
-MYSQL_HOST=<aiven host>
-MYSQL_PORT=<aiven port>
-MYSQL_USER=<aiven user>
-MYSQL_PASSWORD=<aiven password>
-MYSQL_DATABASE=<aiven database>
+MYSQL_HOST=...
+MYSQL_PORT=...
+MYSQL_USER=...
+MYSQL_PASSWORD=...
+MYSQL_DATABASE=defaultdb
+MYSQL_SSL=1
 STORE_FILES_IN_DB=1
-CLINIC_PASSWORD=<choose a strong password>
+CLINIC_PASSWORD=...
 NODE_ENV=production
 NODE_VERSION=22
 ```
 
-6. Deploy once and open the `*.onrender.com` URL (wait for first boot)
-
-## 3) Copy local data (clinic PC)
+3. [ ] Deploy once; open URL  
+4. [ ] Import:
 
 ```powershell
-cd D:\eye-clinic
-
-# Export from local MySQL (.env must point at local DB)
 npm run export:snapshot
-
-# Then point at Aiven and import:
-$env:MYSQL_HOST="..."
-$env:MYSQL_PORT="..."
-$env:MYSQL_USER="..."
-$env:MYSQL_PASSWORD="..."
-$env:MYSQL_DATABASE="defaultdb"
+$env:MYSQL_SSL="1"
 $env:STORE_FILES_IN_DB="1"
+# set MYSQL_* to Aiven
 node scripts/migrate-sqlite-to-mysql.mjs .\data\backups\snapshot.json
 ```
 
-Paste your Aiven connection values here in chat if you want the import command run for you.
+5. [ ] Weekly: Backup now → Download → Drive/USB  
+
+---
+
+## Backup habit (both options)
+
+| When | Action |
+|------|--------|
+| After go-live | Backup now + download once |
+| Weekly | Download latest ZIP → Drive + USB |
+| Disaster | `node scripts/restore-from-backup.mjs <zip>` into empty MySQL |
+
+Server also auto-backs up when the last ZIP is older than ~20 hours.

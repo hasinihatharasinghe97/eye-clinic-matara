@@ -224,6 +224,8 @@ export type SystemSettings = {
   hasPassword: boolean;
   cloudMode?: boolean;
   defaultBackupFolder?: string;
+  backupOverdue?: boolean;
+  backupKeepCount?: number;
 };
 
 export type BackupInfo = {

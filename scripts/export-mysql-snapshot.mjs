@@ -35,6 +35,7 @@ const settings = await getSettings();
 
 const snap = {
   exportedAt: new Date().toISOString(),
+  version: 2,
   patients,
   visits,
   progress_logs,
