@@ -10,6 +10,8 @@ Run the clinic on the internet (phone + browser) at **no monthly cost**, using:
 
 For ~800 patients this fits if you stay within Aiven’s free disk (~1 GB). Uploads are stored **inside MySQL** on Render (`STORE_FILES_IN_DB=1`).
 
+Printable short list: [DEPLOY-CHECKLIST.md](DEPLOY-CHECKLIST.md)
+
 ---
 
 ## Step 1 — Create free MySQL on Aiven
