@@ -1,71 +1,48 @@
-# Free cloud hosting — Eye Clinic Matara
+# Cloud hosting — HeatWave (50 GB) + Render
 
-Run the clinic on the internet (phone + browser) at **no monthly cost**.
+**App:** [Render](https://render.com) free Web Service  
+**Database:** Oracle MySQL HeatWave Always Free (~50 GiB) via Network Load Balancer  
+**Files:** stored in MySQL (`STORE_FILES_IN_DB=1`)
 
-## Choose a stack
-
-| Goal | Database / host | App | Disk for uploads |
-|------|-----------------|-----|------------------|
-| **More storage (recommended)** | [Oracle Always Free VM](HOSTING-ORACLE.md) (MySQL on the VM) | Same VM | VM disk (tens of GB) |
-| **Quickest signup** | [Aiven free MySQL](https://aiven.io/free-mysql-database) (~**1 GB**) | [Render](https://render.com) free | Inside MySQL (`STORE_FILES_IN_DB=1`) |
-| **Oracle managed 50 GB** | HeatWave Always Free + NLB | Render | Inside MySQL — see [HOSTING-ORACLE.md](HOSTING-ORACLE.md) |
-
-Printable lists: [DEPLOY-CHECKLIST.md](DEPLOY-CHECKLIST.md) · Oracle steps: [HOSTING-ORACLE.md](HOSTING-ORACLE.md)
+Checklist: [DEPLOY-CHECKLIST.md](DEPLOY-CHECKLIST.md)
 
 ---
 
-## Backup system
+## 1. Oracle HeatWave MySQL
 
-Every ZIP contains:
+1. OCI Console → **Databases** → **HeatWave MySQL** → **Create DB system**
+2. Template: **Always Free** (`MySQL.Free`, 50 GiB)
+3. Admin user + strong password (save them)
+4. Place the DB on a **private subnet** in your VCN
+5. Wait until status is **Active**
+6. Note the **private IP** and port **3306**
 
-- `snapshot.json` — patients, visits, progress, attachments metadata, disease assessments, custom forms  
-- `uploads/` — report images / PDFs  
-- `README-RESTORE.txt` — restore instructions  
+Create the app database (DBeaver / MySQL client via NLB after step 2):
 
-### Automatic
-
-- If the last backup is **older than ~20 hours**, the server creates one on the next check (covers free hosts that sleep).  
-- On always-on machines, an evening backup also runs.  
-- Keeps the last **14** ZIPs on disk (PC/Oracle VM) or **7** in MySQL (cloud / `STORE_FILES_IN_DB`). Override with `BACKUP_KEEP`.
-
-### Manual + offsite (required)
-
-1. **Backup & Settings** → **Backup now** → **Download latest**  
-2. Copy the ZIP to **Google Drive / OneDrive / USB** (weekly minimum; two locations is better)  
-3. Do not rely only on Aiven/Oracle/Render storage  
-
-### Restore
-
-```powershell
-# Destination MYSQL_* in .env or env vars; empty DB preferred
-$env:STORE_FILES_IN_DB="1"   # only when destination stores files in MySQL
-node scripts/restore-from-backup.mjs .\EyeClinic-Backup-2026-....zip
+```sql
+CREATE DATABASE IF NOT EXISTS eye_clinic
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Also: `npm run export:snapshot` writes `data/backups/snapshot.json` without a full ZIP.
+---
+
+## 2. Network Load Balancer (public MySQL endpoint)
+
+HeatWave has no public IP. Expose it with an NLB:
+
+1. **Networking** → **Network Load Balancer** → **Create** (Public)
+2. Same VCN; subnet = **public** subnet
+3. Listener: **TCP 3306**, idle timeout **120**
+4. Backend set: health check **TCP 3306**, **Preserve source IP = OFF**
+5. Add backend: HeatWave **private IP**, port **3306**
+6. Security lists / NSG: allow **TCP 3306** to the NLB and from the NLB to the private subnet
+7. Copy the NLB **public IP** → this is `MYSQL_HOST`
 
 ---
 
-## Path A — Oracle VM (more storage)
+## 3. Render Web Service
 
-Follow **[HOSTING-ORACLE.md](HOSTING-ORACLE.md)** end to end (create VM → install MySQL/Node → systemd → import data → backups).
-
----
-
-## Path B — Aiven MySQL + Render (simple, 1 GB)
-
-### B1 — Aiven free MySQL
-
-1. Sign up at https://aiven.io  
-2. Create **MySQL** → plan **Free**  
-3. Copy Host, Port, User, Password, Database (`defaultdb` is common)  
-4. Public hostname is fine for Render  
-
-### B2 — GitHub
-
-Repo: https://github.com/hasinihatharasinghe97/eye-clinic-matara — push `main` after local changes. Never commit `.env`.
-
-### B3 — Render free Web Service
+Repo: https://github.com/hasinihatharasinghe97/eye-clinic-matara  
 
 **Use Node runtime, not Docker.**
 
@@ -75,56 +52,59 @@ Repo: https://github.com/hasinihatharasinghe97/eye-clinic-matara — push `main`
 | Start | `node server/src/index.js` |
 | Plan | Free |
 
-Env vars:
+Environment variables:
 
 | Variable | Value |
 |----------|--------|
-| `MYSQL_HOST` / `PORT` / `USER` / `PASSWORD` / `DATABASE` | from Aiven |
-| `MYSQL_SSL` | `1` (Aiven usually needs TLS) |
+| `MYSQL_HOST` | NLB public IP |
+| `MYSQL_PORT` | `3306` |
+| `MYSQL_USER` | HeatWave admin user |
+| `MYSQL_PASSWORD` | HeatWave password |
+| `MYSQL_DATABASE` | `eye_clinic` |
+| `MYSQL_SSL` | `1` |
 | `STORE_FILES_IN_DB` | `1` |
-| `CLINIC_PASSWORD` | strong password |
+| `CLINIC_PASSWORD` | clinic login password |
 | `NODE_ENV` | `production` |
 | `NODE_VERSION` | `22` |
 
-Cold start after idle: ~30–60s.
+Cold start after idle: ~30–60s. Open `/api/health` — `ok: true` means MySQL is reachable.
 
-### B4 — Copy PC data into Aiven
+---
+
+## 4. Import clinic PC data
 
 ```powershell
 cd D:\eye-clinic
 npm run export:snapshot
 
-$env:MYSQL_HOST="YOUR_AIVEN_HOST"
-$env:MYSQL_PORT="YOUR_AIVEN_PORT"
-$env:MYSQL_USER="avnadmin"
-$env:MYSQL_PASSWORD="YOUR_AIVEN_PASSWORD"
-$env:MYSQL_DATABASE="defaultdb"
+# Point MYSQL_* at HeatWave (via NLB) — use .env or env vars:
 $env:MYSQL_SSL="1"
 $env:STORE_FILES_IN_DB="1"
-
-node scripts/migrate-sqlite-to-mysql.mjs .\data\backups\snapshot.json
-# or: node scripts/restore-from-backup.mjs .\path\to\backup.zip
+npm run import:heatwave
+# or:
+node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
 ```
 
 ---
 
-## Use on mobile
+## Backup system
 
-Open the public URL → sign in with `CLINIC_PASSWORD` → optional Add to Home Screen.
+Every ZIP contains `snapshot.json`, `uploads/`, and restore notes.
 
----
+- **Automatic:** if the last backup is older than ~20 hours (delayed a few minutes after wake on Render so the UI stays responsive)
+- **Keeps** last **7** ZIPs in MySQL by default (`BACKUP_KEEP`)
+- **Offsite (required):** Backup & Settings → **Backup now** → **Download** → Google Drive + USB weekly
 
-## Keep using only the PC
-
-1. Local MySQL 8+  
-2. `.env` from `.env.example`  
-3. `start-clinic.bat` → http://localhost:5173  
+```powershell
+$env:STORE_FILES_IN_DB="1"
+node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
+```
 
 ---
 
 ## Security
 
-- Strong clinic + MySQL passwords  
-- Do not share the public URL widely  
-- Weekly offsite ZIP backups  
-- Never commit `.env`  
+- Strong `MYSQL_PASSWORD` and `CLINIC_PASSWORD`
+- Prefer locking NLB ingress to known IPs when possible (Render egress can change on free tier)
+- Never commit `.env`
+- Treat the public clinic URL as confidential

@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { UPLOADS_DIR, getSettings, IS_CLOUD, readUploadFile } from './db.js';
+import { db, UPLOADS_DIR, getSettings, IS_CLOUD, readUploadFile } from './db.js';
 import { startDailyBackupScheduler } from './backup.js';
 import patientsRouter from './routes/patients.js';
 import visitsRouter from './routes/visits.js';
@@ -53,11 +53,22 @@ app.use('/uploads', async (req, res, next) => {
   }
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({
-    ok: true,
+app.get('/api/health', async (_req, res) => {
+  let dbOk = false;
+  let dbMs = null;
+  try {
+    const t0 = Date.now();
+    await db.prepare('SELECT 1 AS ok').get();
+    dbMs = Date.now() - t0;
+    dbOk = true;
+  } catch (err) {
+    console.error('[health] db check failed:', err?.message || err);
+  }
+  res.status(dbOk ? 200 : 503).json({
+    ok: dbOk,
     clinic: 'District Ayurvedic Hospital Matara — Eye Clinic',
     cloud: IS_CLOUD,
+    dbMs,
   });
 });
 

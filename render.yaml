@@ -3,7 +3,7 @@ services:
     name: eye-clinic
     runtime: node
     plan: free
-    buildCommand: npm ci && npm ci --prefix server && npm ci --prefix client && npm run build --prefix client
+    buildCommand: npm run build:render
     startCommand: node server/src/index.js
     healthCheckPath: /api/health
     envVars:
@@ -15,6 +15,8 @@ services:
         generateValue: true
       - key: STORE_FILES_IN_DB
         value: "1"
+      - key: MYSQL_SSL
+        value: "1"
       - key: MYSQL_HOST
         sync: false
       - key: MYSQL_PORT
@@ -24,4 +26,4 @@ services:
       - key: MYSQL_PASSWORD
         sync: false
       - key: MYSQL_DATABASE
-        sync: false
+        value: eye_clinic

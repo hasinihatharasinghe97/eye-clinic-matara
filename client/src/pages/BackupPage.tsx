@@ -131,8 +131,7 @@ $env:STORE_FILES_IN_DB="1"   # cloud only
 node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
         </pre>
         <p className="muted">
-          Full hosting and restore steps: see <code>docs/HOSTING.md</code> and{' '}
-          <code>docs/HOSTING-ORACLE.md</code> in the project.
+          Full hosting and restore steps: see <code>docs/HOSTING.md</code> in the project.
         </p>
       </div>
 

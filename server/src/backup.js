@@ -81,8 +81,9 @@ async function collectZipToBuffer() {
       'Restore (empty target MySQL recommended):',
       '  1. Unzip this file',
       '  2. Point MYSQL_* at the destination database',
-      '  3. For cloud hosts: set STORE_FILES_IN_DB=1',
+      '  3. For Render/HeatWave: set STORE_FILES_IN_DB=1',
       '  4. node scripts/restore-from-backup.mjs <path-to-this-zip-or-folder>',
+      '  5. See docs/HOSTING.md',
       '',
       'Also keep a copy on Google Drive / USB — do not rely only on the server.',
       `Created: ${new Date().toISOString()}`,
@@ -225,19 +226,31 @@ export function isBackupStale(lastBackupAt, now = Date.now()) {
 }
 
 let lastAutoDate = null;
+let backupInFlight = false;
 
 export function startDailyBackupScheduler() {
   const tick = async () => {
+    if (backupInFlight) return;
     try {
       const settings = await getSettings();
       const today = new Date().toISOString().slice(0, 10);
       const hour = new Date().getHours();
 
+      // Don't auto-backup an empty clinic DB (blocks Render↔HeatWave on first wake).
+      const row = await db.prepare('SELECT COUNT(*) AS c FROM patients').get();
+      const patientCount = Number(row?.c ?? 0);
+      if (patientCount === 0) return;
+
       // If last backup is stale (e.g. Render slept through evening), back up on wake.
       if (isBackupStale(settings.lastBackupAt)) {
-        await createBackup({ persist: true });
-        lastAutoDate = today;
-        console.log(`[backup] Stale/missing backup refreshed for ${today}`);
+        backupInFlight = true;
+        try {
+          await createBackup({ persist: true });
+          lastAutoDate = today;
+          console.log(`[backup] Stale/missing backup refreshed for ${today}`);
+        } finally {
+          backupInFlight = false;
+        }
         return;
       }
 
@@ -249,14 +262,22 @@ export function startDailyBackupScheduler() {
       // Evening window (local server time) for a second copy on always-on hosts
       if (hour < 18 && hour > 2) return;
 
-      await createBackup({ persist: true });
-      lastAutoDate = today;
-      console.log(`[backup] Daily backup completed for ${today}`);
+      backupInFlight = true;
+      try {
+        await createBackup({ persist: true });
+        lastAutoDate = today;
+        console.log(`[backup] Daily backup completed for ${today}`);
+      } finally {
+        backupInFlight = false;
+      }
     } catch (err) {
+      backupInFlight = false;
       console.error('[backup] Daily backup failed:', err);
     }
   };
 
   setInterval(tick, 30 * 60 * 1000);
-  setTimeout(tick, 20_000);
+  // Cloud: wait several minutes after wake so patient list APIs are not starved.
+  const initialDelayMs = IS_CLOUD ? 5 * 60 * 1000 : 20_000;
+  setTimeout(tick, initialDelayMs);
 }

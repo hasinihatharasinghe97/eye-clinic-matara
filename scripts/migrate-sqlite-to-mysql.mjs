@@ -4,14 +4,15 @@
  *   - legacy local SQLite data/patients.db
  *
  * IDs are remapped to MySQL AUTO_INCREMENT integers.
- * MYSQL_* env vars point at the *destination* database (local or Aiven).
+ * MYSQL_* env vars point at the *destination* database (local or HeatWave).
  *
- * Cloud example (PowerShell):
- *   $env:MYSQL_HOST="..."
- *   $env:MYSQL_PORT="..."
- *   $env:MYSQL_USER="..."
+ * HeatWave example (PowerShell):
+ *   $env:MYSQL_HOST="<NLB public IP>"
+ *   $env:MYSQL_PORT="3306"
+ *   $env:MYSQL_USER="clinicadmin"
  *   $env:MYSQL_PASSWORD="..."
- *   $env:MYSQL_DATABASE="defaultdb"
+ *   $env:MYSQL_DATABASE="eye_clinic"
+ *   $env:MYSQL_SSL="1"
  *   $env:STORE_FILES_IN_DB="1"
  *   node scripts/migrate-sqlite-to-mysql.mjs .\data\backups\snapshot.json
  */

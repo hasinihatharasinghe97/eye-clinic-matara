@@ -9,4 +9,5 @@ server/dist/
 *.log
 .env
 .env.local
+.env.clinic-pc
 .DS_Store

@@ -285,7 +285,8 @@ function Dashboard() {
   }, [q]);
 
   const backupStale = useMemo(() => {
-    if (!settings?.lastBackupAt) return true;
+    if (!settings) return false;
+    if (!settings.lastBackupAt) return true;
     const days = (Date.now() - new Date(settings.lastBackupAt).getTime()) / (1000 * 60 * 60 * 24);
     return days > 2;
   }, [settings]);

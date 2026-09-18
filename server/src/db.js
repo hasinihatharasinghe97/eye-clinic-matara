@@ -58,7 +58,7 @@ const MYSQL_USER = process.env.MYSQL_USER || 'root';
 const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD ?? '';
 const MYSQL_DATABASE = process.env.MYSQL_DATABASE || 'eye_clinic';
 
-/** Enable TLS to MySQL (Aiven, Oracle HeatWave via NLB, etc.). Set MYSQL_SSL=1 or required. */
+/** Enable TLS to MySQL (Oracle HeatWave via NLB). Set MYSQL_SSL=1 or required. */
 const MYSQL_SSL =
   process.env.MYSQL_SSL === '1' ||
   process.env.MYSQL_SSL === 'true' ||
@@ -95,6 +95,7 @@ async function ensureDatabaseExists() {
       user: MYSQL_USER,
       password: MYSQL_PASSWORD,
       multipleStatements: true,
+      connectTimeout: 15_000,
       ssl: mysqlSslOption,
     });
     await conn.query(
@@ -132,8 +133,12 @@ const pool = mysql.createPool({
   password: MYSQL_PASSWORD,
   database: MYSQL_DATABASE,
   waitForConnections: true,
-  connectionLimit: 10,
+  // Always Free HeatWave + Render: keep the pool small and fail fast on hangs
+  connectionLimit: IS_CLOUD ? 4 : 10,
+  queueLimit: 20,
+  connectTimeout: 15_000,
   enableKeepAlive: true,
+  keepAliveInitialDelay: 10_000,
   ssl: mysqlSslOption,
 });
 

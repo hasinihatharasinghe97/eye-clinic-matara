@@ -62,35 +62,45 @@ function mapPatient(row) {
 }
 
 router.get('/', async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  let rows;
-  if (q) {
-    const like = `%${q}%`;
-    rows = await db
-      .prepare(
-        `SELECT * FROM patients
-         WHERE name LIKE ? OR opd_ad_no LIKE ? OR phone LIKE ? OR id_number LIKE ?
-         ORDER BY updated_at DESC
-         LIMIT 200`
-      )
-      .all(like, like, like, like);
-  } else {
-    rows = await db.prepare('SELECT * FROM patients ORDER BY updated_at DESC LIMIT 200').all();
+  try {
+    const q = String(req.query.q || '').trim();
+    let rows;
+    if (q) {
+      const like = `%${q}%`;
+      rows = await db
+        .prepare(
+          `SELECT * FROM patients
+           WHERE name LIKE ? OR opd_ad_no LIKE ? OR phone LIKE ? OR id_number LIKE ?
+           ORDER BY updated_at DESC
+           LIMIT 200`
+        )
+        .all(like, like, like, like);
+    } else {
+      rows = await db.prepare('SELECT * FROM patients ORDER BY updated_at DESC LIMIT 200').all();
+    }
+    res.json(rows.map(mapPatient));
+  } catch (err) {
+    console.error('[patients] list failed:', err);
+    res.status(500).json({ error: err.message || 'Could not load patients' });
   }
-  res.json(rows.map(mapPatient));
 });
 
 router.get('/recent-visits', async (_req, res) => {
-  const rows = await db
-    .prepare(
-      `SELECT v.id AS visit_id, v.visit_date, v.diagnosis, p.id AS patient_id, p.name AS patient_name, p.opd_ad_no
-       FROM visits v
-       JOIN patients p ON p.id = v.patient_id
-       ORDER BY v.visit_date DESC, v.created_at DESC
-       LIMIT 15`
-    )
-    .all();
-  res.json(rows);
+  try {
+    const rows = await db
+      .prepare(
+        `SELECT v.id AS visit_id, v.visit_date, v.diagnosis, p.id AS patient_id, p.name AS patient_name, p.opd_ad_no
+         FROM visits v
+         JOIN patients p ON p.id = v.patient_id
+         ORDER BY v.visit_date DESC, v.created_at DESC
+         LIMIT 15`
+      )
+      .all();
+    res.json(rows);
+  } catch (err) {
+    console.error('[patients] recent-visits failed:', err);
+    res.status(500).json({ error: err.message || 'Could not load recent visits' });
+  }
 });
 
 router.get('/:id/charts', async (req, res) => {

@@ -1,6 +1,6 @@
 /**
  * Export the current MySQL database to snapshot.json (same shape as in-app Backup ZIPs).
- * Use this before importing into a cloud MySQL (Aiven + Render).
+ * Use this before importing into Oracle HeatWave (Render cloud).
  *
  * Usage (PowerShell) — uses .env / MYSQL_* for the *source* database:
  *   node scripts/export-mysql-snapshot.mjs
@@ -56,5 +56,5 @@ console.log(`Wrote ${outPath}`);
 console.log(
   `${patients.length} patients, ${visits.length} visits, ${progress_logs.length} progress, ${attachments.length} attachments, ${disease_assessments.length} assessments, ${custom_disease_forms.length} custom forms`
 );
-console.log('Next: import into cloud MySQL with STORE_FILES_IN_DB=1 — see docs/HOSTING.md');
+console.log('Next: import into HeatWave with STORE_FILES_IN_DB=1 — see docs/HOSTING.md');
 process.exit(0);
