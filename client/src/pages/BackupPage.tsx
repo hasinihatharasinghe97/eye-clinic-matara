@@ -140,32 +140,51 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
         {backups.length === 0 ? (
           <p className="empty">No backups yet.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Created</th>
-                  <th>Size</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {backups.map((b) => (
-                  <tr key={b.id}>
-                    <td>{b.zipName}</td>
-                    <td>{new Date(b.createdAt).toLocaleString()}</td>
-                    <td>{formatSize(b.size)}</td>
-                    <td>
-                      <a className="btn secondary" href={api.backupDownloadUrl(b.id)}>
-                        Download
-                      </a>
-                    </td>
+          <>
+            <div className="table-wrap desktop-only">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Created</th>
+                    <th>Size</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {backups.map((b) => (
+                    <tr key={b.id}>
+                      <td>{b.zipName}</td>
+                      <td>{new Date(b.createdAt).toLocaleString()}</td>
+                      <td>{formatSize(b.size)}</td>
+                      <td>
+                        <a className="btn secondary" href={api.backupDownloadUrl(b.id)}>
+                          Download
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="mobile-list mobile-only">
+              {backups.map((b) => (
+                <li key={b.id} className="mobile-list-card">
+                  <div className="mobile-list-item static">
+                    <span className="mobile-list-title">{b.zipName}</span>
+                    <span className="mobile-list-meta">
+                      {new Date(b.createdAt).toLocaleString()} · {formatSize(b.size)}
+                    </span>
+                  </div>
+                  <div className="mobile-list-actions">
+                    <a className="btn secondary" href={api.backupDownloadUrl(b.id)}>
+                      Download
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
 

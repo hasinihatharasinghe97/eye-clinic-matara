@@ -452,7 +452,7 @@ export function FormBuilderPage({ onNavigate }: Props) {
   return (
     <>
       <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div className="section-toolbar">
           <div>
             <h2 style={{ marginTop: 0 }}>Disease forms</h2>
             <p className="muted" style={{ marginBottom: 0 }}>
@@ -474,43 +474,72 @@ export function FormBuilderPage({ onNavigate }: Props) {
             None yet. Click <strong>New disease form</strong> (e.g. Glaucoma).
           </p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Questions</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {customForms.map((f) => (
-                  <tr key={f.id}>
-                    <td>
-                      <strong>{f.shortTitle}</strong>
-                    </td>
-                    <td>
-                      {(f.fields || []).filter((x) => x.type !== 'section' && x.type !== 'followup')
-                        .length}
-                    </td>
-                    <td className="row">
-                      <button className="btn secondary" type="button" onClick={() => startEdit(f.id)}>
-                        Edit
-                      </button>
-                      <button
-                        className="btn danger"
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void remove(f.id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
+          <>
+            <div className="table-wrap desktop-only">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Questions</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {customForms.map((f) => (
+                    <tr key={f.id}>
+                      <td>
+                        <strong>{f.shortTitle}</strong>
+                      </td>
+                      <td>
+                        {(f.fields || []).filter((x) => x.type !== 'section' && x.type !== 'followup')
+                          .length}
+                      </td>
+                      <td className="row">
+                        <button className="btn secondary" type="button" onClick={() => startEdit(f.id)}>
+                          Edit
+                        </button>
+                        <button
+                          className="btn danger"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void remove(f.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="mobile-list mobile-only">
+              {customForms.map((f) => (
+                <li key={f.id} className="mobile-list-card">
+                  <div className="mobile-list-item static">
+                    <span className="mobile-list-title">{f.shortTitle}</span>
+                    <span className="mobile-list-meta">
+                      {(f.fields || []).filter((x) => x.type !== 'section' && x.type !== 'followup')
+                        .length}{' '}
+                      questions
+                    </span>
+                  </div>
+                  <div className="mobile-list-actions">
+                    <button className="btn secondary" type="button" onClick={() => startEdit(f.id)}>
+                      Edit
+                    </button>
+                    <button
+                      className="btn danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void remove(f.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
 

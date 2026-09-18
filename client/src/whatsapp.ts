@@ -21,83 +21,19 @@ export function toWhatsAppNumber(raw: string, defaultCountry = '94'): string | n
   return digits;
 }
 
+/** HTTPS link that opens WhatsApp to a specific chat (works from a real <a href>). */
 export function whatsAppChatUrl(phoneDigits: string, message: string): string {
   const text = encodeURIComponent(message);
   return `https://wa.me/${phoneDigits}?text=${text}`;
 }
 
-export function canShareFiles(): boolean {
-  try {
-    return typeof navigator !== 'undefined' && typeof navigator.share === 'function';
-  } catch {
-    return false;
-  }
+/** Native app deep link (Android / some iOS cases). */
+export function whatsAppAppUrl(phoneDigits: string, message: string): string {
+  const text = encodeURIComponent(message);
+  return `whatsapp://send?phone=${phoneDigits}&text=${text}`;
 }
 
-/** True when this browser can share File objects (typical on Android Chrome / iOS Safari). */
-export function canSharePdfFile(file: File): boolean {
-  if (!canShareFiles()) return false;
-  try {
-    if (typeof navigator.canShare !== 'function') return true;
-    return navigator.canShare({ files: [file] });
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Share a PDF via the system share sheet (user picks WhatsApp).
- * Note: browsers cannot force a specific WhatsApp contact when sharing a file.
- */
-export async function sharePdfToWhatsApp(opts: {
-  file: File;
-  message: string;
-  title?: string;
-}): Promise<'shared' | 'unsupported' | 'aborted'> {
-  const { file, message, title } = opts;
-  if (!canShareFiles()) return 'unsupported';
-
-  const pdf =
-    file.type === 'application/pdf'
-      ? file
-      : new File([file], file.name || 'medicine.pdf', { type: 'application/pdf' });
-
-  const payload: ShareData = {
-    title: title || 'Medicine PDF',
-    text: message,
-    files: [pdf],
-  };
-
-  try {
-    if (typeof navigator.canShare === 'function' && !navigator.canShare(payload)) {
-      return 'unsupported';
-    }
-    await navigator.share(payload);
-    return 'shared';
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') return 'aborted';
-    return 'unsupported';
-  }
-}
-
-/** Open WhatsApp to a number. Uses location assign when possible to avoid popup blockers. */
-export function openWhatsAppChat(phoneDigits: string, message: string, preOpened?: Window | null) {
-  const url = whatsAppChatUrl(phoneDigits, message);
-  if (preOpened && !preOpened.closed) {
-    preOpened.location.href = url;
-    return;
-  }
-  // Prefer same-tab navigation on mobile so async clicks are not blocked
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    window.location.href = url;
-    return;
-  }
-  const w = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!w) window.location.href = url;
-}
-
-/** Trigger a PDF download so the doctor can attach it in WhatsApp if share is unavailable. */
+/** Trigger a PDF download so the doctor can attach it in WhatsApp. */
 export function downloadFile(file: File) {
   const url = URL.createObjectURL(file);
   const a = document.createElement('a');

@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Attachment, type Patient } from '../api';
 import {
-  canSharePdfFile,
   defaultMedicineMessage,
   downloadFile,
   openWhatsAppChat,
-  sharePdfToWhatsApp,
   toWhatsAppNumber,
 } from '../whatsapp';
 
@@ -151,52 +149,29 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
       if (!ok) return;
     }
 
-    // Open a placeholder window during the user gesture so popup blockers don't stop WhatsApp later
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const preOpened = !isMobile ? window.open('about:blank', '_blank') : null;
+    const msg = message.trim() || defaultMedicineMessage(patient.name, undefined, medicineNo);
+
+    // Open WhatsApp chat IMMEDIATELY (same tick as the tap) — before any await.
+    // If this runs after fetch/share, mobile browsers block it.
+    openWhatsAppChat(waNumber, msg);
 
     setSending(true);
     try {
       const file = await resolvePdfFile();
       if (!file) {
-        preOpened?.close();
         setError(
-          'Select a medicine PDF from this device, or choose one already on file for this patient.'
+          'WhatsApp chat opened, but no PDF was selected. Choose a PDF and tap send again, or attach manually.'
         );
         return;
       }
 
-      const msg = message.trim() || defaultMedicineMessage(patient.name, undefined, medicineNo);
-      const title = `Medicine #${medicineNo} — ${patient.name}`;
-
-      // 1) Try system share (best way to attach the PDF on phones)
-      if (canSharePdfFile(file)) {
-        const shareResult = await sharePdfToWhatsApp({ file, message: msg, title });
-        if (shareResult === 'aborted') {
-          preOpened?.close();
-          setStatus('Share cancelled — medicine not marked.');
-          return;
-        }
-        if (shareResult === 'shared') {
-          preOpened?.close();
-          await persistSent([...sent, medicineNo]);
-          setStatus(
-            `Share opened — choose WhatsApp, then select this patient (+${waNumber}). Medicine #${medicineNo} marked as sent.`
-          );
-          return;
-        }
-      }
-
-      // 2) Fallback: download PDF + open WhatsApp chat with this patient's number
       downloadFile(file);
-      openWhatsAppChat(waNumber, msg, preOpened);
       await persistSent([...sent, medicineNo]);
       setStatus(
-        `WhatsApp opened for +${waNumber}. The PDF was downloaded — tap the paperclip in WhatsApp and choose the file to attach.`
+        `WhatsApp chat opened for +${waNumber}. PDF downloaded — in WhatsApp tap 📎 (attach) and choose the file.`
       );
     } catch (err) {
-      preOpened?.close();
-      setError(err instanceof Error ? err.message : 'Could not prepare WhatsApp send');
+      setError(err instanceof Error ? err.message : 'Could not prepare the PDF');
     } finally {
       setSending(false);
     }
@@ -213,16 +188,14 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
   }
 
   const numbers = useMemo(() => Array.from({ length: MEDICINE_MAX }, (_, i) => i + 1), []);
-  const shareHint = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Send medicine PDF on WhatsApp</h3>
       <p className="muted">
-        Phone number is filled from the patient record. Tap a medicine number (1–200), then send.
-        {shareHint
-          ? ' On phone, the share sheet opens so you can send the PDF in WhatsApp; the patient chat also opens with their number.'
-          : ' WhatsApp opens with this patient’s number and the PDF downloads so you can attach it (paperclip).'}
+        Phone is filled from the patient record. Tap a medicine number, then{' '}
+        <strong>Send PDF via WhatsApp</strong> — WhatsApp opens that patient’s chat and the PDF
+        downloads so you can attach it with the paperclip.
       </p>
 
       <div className="grid-2">
