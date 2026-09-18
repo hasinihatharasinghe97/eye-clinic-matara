@@ -305,7 +305,7 @@ function Dashboard() {
         </div>
       )}
 
-      <div className="row" style={{ marginBottom: '1rem', justifyContent: 'space-between' }}>
+      <div className="page-toolbar">
         <div>
           <h2 style={{ margin: 0 }}>Patients</h2>
           <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
@@ -316,7 +316,7 @@ function Dashboard() {
                 : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
           </p>
         </div>
-        <div className="row">
+        <div className="page-toolbar-actions">
           <button className="btn secondary" type="button" onClick={() => navigate('/stats')}>
             Clinic stats
           </button>
@@ -363,7 +363,8 @@ function Dashboard() {
             onAction={() => (q ? setQ('') : navigate('/patients/new'))}
           />
         ) : (
-          <div className="table-wrap">
+          <>
+          <div className="table-wrap desktop-only">
             <table className="table">
               <thead>
                 <tr>
@@ -411,6 +412,24 @@ function Dashboard() {
               </tbody>
             </table>
           </div>
+          <ul className="mobile-list mobile-only">
+            {patients.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="mobile-list-item"
+                  onClick={() => navigate(`/patients/${p.id}`)}
+                >
+                  <span className="mobile-list-title">{p.name}</span>
+                  <span className="mobile-list-meta">
+                    OPD {p.opdAdNo || '—'} · {p.age ?? '—'} / {p.gender || '—'}
+                  </span>
+                  <span className="mobile-list-meta">{p.phone || 'No phone'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </div>
 
@@ -424,7 +443,8 @@ function Dashboard() {
             hint="Open a patient and add an eye screening visit."
           />
         ) : (
-          <div className="table-wrap">
+          <>
+          <div className="table-wrap desktop-only">
             <table className="table">
               <thead>
                 <tr>
@@ -461,6 +481,24 @@ function Dashboard() {
               </tbody>
             </table>
           </div>
+          <ul className="mobile-list mobile-only">
+            {recent.map((v) => (
+              <li key={v.visit_id}>
+                <button
+                  type="button"
+                  className="mobile-list-item"
+                  onClick={() => navigate(`/patients/${v.patient_id}/visits`)}
+                >
+                  <span className="mobile-list-title">{v.patient_name}</span>
+                  <span className="mobile-list-meta">
+                    {v.visit_date} · OPD {v.opd_ad_no || '—'}
+                  </span>
+                  <span className="mobile-list-meta">{v.diagnosis || 'No diagnosis noted'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </div>
     </>
@@ -471,11 +509,13 @@ export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
   const [route, setRoute] = useState<Route>(parseRoute);
   const [patientName, setPatientName] = useState<string | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
   const patientId = routePatientId(route);
 
   useEffect(() => {
     const onHash = () => {
       setRoute(parseRoute());
+      setNavOpen(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
     window.addEventListener('hashchange', onHash);
@@ -511,21 +551,36 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button
-          type="button"
-          className="brand brand-btn"
-          onClick={() => navigate('/')}
-          title="Go to patient list"
-        >
-          <strong>Nethraloka Ayurvedic Eye Clinic</strong>
-          <span>Patient System</span>
-        </button>
-        <nav className="nav-links">
+        <div className="topbar-main">
+          <button
+            type="button"
+            className="brand brand-btn"
+            onClick={() => navigate('/')}
+            title="Go to patient list"
+          >
+            <strong>Nethraloka Ayurvedic Eye Clinic</strong>
+            <span>Patient System</span>
+          </button>
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-expanded={navOpen}
+            aria-controls="main-nav"
+            aria-label={navOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setNavOpen((o) => !o)}
+          >
+            <span className="nav-toggle-bar" />
+            <span className="nav-toggle-bar" />
+            <span className="nav-toggle-bar" />
+          </button>
+        </div>
+        <nav id="main-nav" className={`nav-links${navOpen ? ' is-open' : ''}`}>
           <a
             href="#/"
             className={route.name === 'dashboard' ? 'active' : ''}
             onClick={(e) => {
               e.preventDefault();
+              setNavOpen(false);
               navigate('/');
             }}
           >
@@ -536,6 +591,7 @@ export default function App() {
             className={route.name === 'stats' ? 'active' : ''}
             onClick={(e) => {
               e.preventDefault();
+              setNavOpen(false);
               navigate('/stats');
             }}
           >
@@ -546,6 +602,7 @@ export default function App() {
             className={route.name === 'forms' ? 'active' : ''}
             onClick={(e) => {
               e.preventDefault();
+              setNavOpen(false);
               navigate('/forms');
             }}
           >
@@ -556,6 +613,7 @@ export default function App() {
             className={route.name === 'backup' ? 'active' : ''}
             onClick={(e) => {
               e.preventDefault();
+              setNavOpen(false);
               navigate('/backup');
             }}
           >
@@ -565,6 +623,7 @@ export default function App() {
             type="button"
             className="linkish"
             onClick={() => {
+              setNavOpen(false);
               setToken(null);
               setAuthed(false);
             }}

@@ -173,7 +173,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   return (
     <>
       <div className="card">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div className="patient-header">
           <div>
             <h2 style={{ margin: 0 }}>{patient.name}</h2>
             <p className="muted" style={{ margin: '0.35rem 0 0' }}>
@@ -191,7 +191,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               </p>
             )}
           </div>
-          <div className="row">
+          <div className="patient-header-actions">
             <button
               className="btn secondary"
               type="button"
