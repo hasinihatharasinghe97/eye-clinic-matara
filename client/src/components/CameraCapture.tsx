@@ -97,9 +97,11 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
       setError('Camera is not ready yet. Wait a moment and try again.');
       return;
     }
+    const maxEdge = 1600;
+    const scale = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -116,7 +118,7 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
         setError('');
       },
       'image/jpeg',
-      0.92
+      0.72
     );
   }
 

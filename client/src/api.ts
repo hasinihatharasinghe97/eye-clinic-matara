@@ -368,8 +368,10 @@ export const api = {
     request<Attachment[]>(`/api/patients/${patientId}/attachments`),
 
   uploadAttachment: async (patientId: string, file: File, visitId?: string) => {
+    const { compressImageForUpload } = await import('./compressImage');
+    const prepared = await compressImageForUpload(file);
     const form = new FormData();
-    form.append('file', file);
+    form.append('file', prepared);
     if (visitId) form.append('visitId', visitId);
     const res = await fetch(`/api/patients/${patientId}/attachments`, {
       method: 'POST',

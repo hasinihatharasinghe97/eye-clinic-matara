@@ -122,11 +122,11 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
 
   async function uploadFile(file: File) {
     setUploading(true);
+    setError('');
     try {
-      await api.uploadAttachment(patientId, file);
-      await load();
+      const created = await api.uploadAttachment(patientId, file);
+      setFiles((prev) => [created, ...prev]);
       setCameraOpen(false);
-      setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -594,7 +594,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 Take photo
               </button>
               <label className="btn secondary" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
-                {uploading ? 'Uploading…' : 'Upload image / PDF'}
+                {uploading ? 'Saving…' : 'Upload image / PDF'}
                 <input
                   type="file"
                   accept="image/*,application/pdf"
