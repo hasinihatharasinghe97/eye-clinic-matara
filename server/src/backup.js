@@ -14,6 +14,12 @@ import {
   saveSettings,
   readUploadFile,
 } from './db.js';
+import {
+  createAndUploadDriveBackup,
+  isGoogleDriveConfigured,
+  recordDriveError,
+  shouldRunDailyDriveUpload,
+} from './googleDriveBackup.js';
 
 /** How many ZIP backups to keep. Cloud default is lower to save MySQL disk. */
 const KEEP_BACKUPS = Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14;
@@ -234,6 +240,26 @@ export function isBackupStale(lastBackupAt, now = Date.now()) {
 
 let lastAutoDate = null;
 let backupInFlight = false;
+let driveInFlight = false;
+
+async function maybeUploadToGoogleDrive(reason) {
+  if (!isGoogleDriveConfigured() || driveInFlight) return null;
+  const settings = await getSettings();
+  if (!shouldRunDailyDriveUpload(settings)) return null;
+
+  driveInFlight = true;
+  try {
+    const result = await createAndUploadDriveBackup(createBackup);
+    console.log(`[gdrive] Daily Drive upload ok (${reason}): ${result.zipName}`);
+    return result;
+  } catch (err) {
+    const msg = await recordDriveError(err);
+    console.error(`[gdrive] Daily Drive upload failed (${reason}):`, msg);
+    return null;
+  } finally {
+    driveInFlight = false;
+  }
+}
 
 export function startDailyBackupScheduler() {
   const tick = async () => {
@@ -248,7 +274,10 @@ export function startDailyBackupScheduler() {
       const patientCount = Number(row?.c ?? 0);
       if (patientCount === 0) return;
 
-      // If last backup is stale (e.g. Render slept through evening), back up on wake.
+      // Google Drive daily upload at/after 01:00 Asia/Colombo (catch-up if Render slept).
+      await maybeUploadToGoogleDrive('schedule');
+
+      // If last HeatWave/local ZIP is stale (e.g. Render slept through evening), refresh.
       if (isBackupStale(settings.lastBackupAt)) {
         backupInFlight = true;
         try {
@@ -283,8 +312,28 @@ export function startDailyBackupScheduler() {
     }
   };
 
-  setInterval(tick, 30 * 60 * 1000);
+  // Check often enough to hit the 1:00 Asia/Colombo Drive window.
+  setInterval(tick, 5 * 60 * 1000);
   // Cloud: wait several minutes after wake so patient list APIs are not starved.
   const initialDelayMs = IS_CLOUD ? 5 * 60 * 1000 : 20_000;
   setTimeout(tick, initialDelayMs);
+}
+
+/** Manual / cron entry point for Drive upload. */
+export async function runGoogleDriveBackupNow() {
+  if (!isGoogleDriveConfigured()) {
+    throw new Error('Google Drive backup is not configured');
+  }
+  if (driveInFlight) {
+    throw new Error('A Google Drive upload is already running');
+  }
+  driveInFlight = true;
+  try {
+    return await createAndUploadDriveBackup(createBackup);
+  } catch (err) {
+    await recordDriveError(err);
+    throw err;
+  } finally {
+    driveInFlight = false;
+  }
 }

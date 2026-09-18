@@ -249,6 +249,15 @@ export type SystemSettings = {
   defaultBackupFolder?: string;
   backupOverdue?: boolean;
   backupKeepCount?: number;
+  googleDrive?: {
+    configured: boolean;
+    timezone: string;
+    schedule: string;
+    lastDriveBackupAt: string | null;
+    lastDriveBackupDate: string | null;
+    lastDriveFileName: string | null;
+    lastDriveError: string | null;
+  };
 };
 
 export type BackupInfo = {
@@ -280,6 +289,16 @@ export const api = {
       '/api/system/backup',
       { method: 'POST' }
     ),
+
+  uploadBackupToDrive: () =>
+    request<{
+      ok: boolean;
+      zipName: string;
+      dateKey: string;
+      uploadedAt: string;
+      size?: number;
+      webViewLink?: string | null;
+    }>('/api/system/drive-backup', { method: 'POST' }),
 
   listBackups: () => request<BackupInfo[]>('/api/system/backups'),
 

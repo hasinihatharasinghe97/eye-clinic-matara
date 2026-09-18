@@ -91,13 +91,38 @@ node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
 
 Every ZIP contains `snapshot.json`, `uploads/`, and restore notes.
 
-- **Automatic:** if the last backup is older than ~20 hours (delayed a few minutes after wake on Render so the UI stays responsive)
-- **Keeps** last **7** ZIPs in MySQL by default (`BACKUP_KEEP`)
-- **Offsite (required):** Backup & Settings → **Backup now** → **Download** → Google Drive + USB weekly
+- **Google Drive daily (recommended):** at **01:00 Asia/Colombo**, upload `Nethraloka-Daily-YYYY-MM-DD.zip` to Drive only (not duplicated into HeatWave); when today’s upload succeeds, **delete yesterday’s** Drive file
+- **Manual HeatWave ZIPs:** Backup now still stores optional ZIPs in MySQL `backup_archives` for in-app download (keeps last **7**)
+- **Restore to a new HeatWave:** point `MYSQL_*` at the new instance + `STORE_FILES_IN_DB=1`, then `node scripts/restore-from-backup.mjs <zip>`
+
+### Google Drive setup
+
+1. Google Cloud Console → create/select project → enable **Google Drive API**
+2. Create a **Service account** → Keys → Add JSON key → download the file
+3. Google Drive → create folder `Nethraloka-Backups` → Share with the service account email as **Editor**
+4. Copy the folder ID from the URL (`…/folders/FOLDER_ID`)
+5. On Render → Environment, set:
+
+| Variable | Value |
+|----------|--------|
+| `GOOGLE_DRIVE_FOLDER_ID` | folder ID |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | full JSON key (one line) — or use `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` |
+| `BACKUP_CRON_SECRET` | long random string |
+
+6. **Free Render sleep:** the app also catch-ups on wake after 1:00 am. For a reliable 1:00 am run, add an external cron (e.g. cron-job.org) daily at 01:00 Asia/Colombo:
+
+```http
+POST https://YOUR-APP.onrender.com/api/system/cron/drive-backup
+X-Cron-Secret: your-BACKUP_CRON_SECRET
+```
+
+7. In the app: **Backup & Settings** → confirm Drive shows Enabled → **Upload to Google Drive now** once to test.
 
 ```powershell
 $env:STORE_FILES_IN_DB="1"
 node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
+# or the daily Drive file:
+node scripts/restore-from-backup.mjs .\Nethraloka-Daily-2026-09-18.zip
 ```
 
 ---
@@ -106,5 +131,5 @@ node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
 
 - Strong `MYSQL_PASSWORD` and `CLINIC_PASSWORD`
 - Prefer locking NLB ingress to known IPs when possible (Render egress can change on free tier)
-- Never commit `.env`
+- Never commit `.env` or the Google service-account JSON
 - Treat the public clinic URL as confidential

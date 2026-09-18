@@ -820,6 +820,11 @@ function defaultSettings() {
     // Empty string = project default (portable across PCs / folder moves)
     backupFolder: process.env.BACKUP_FOLDER || '',
     lastBackupAt: null,
+    lastDriveBackupAt: null,
+    lastDriveBackupDate: null,
+    lastDriveFileId: null,
+    lastDriveFileName: null,
+    lastDriveError: null,
   };
 }
 

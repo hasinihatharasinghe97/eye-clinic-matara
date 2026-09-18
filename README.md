@@ -98,12 +98,20 @@ data/
 
 ## Backup plan (important)
 
+**Cloud (Oracle HeatWave + Render)**
+
+1. Live data and uploaded files are in **HeatWave MySQL** (`STORE_FILES_IN_DB=1`).
+2. **Backup now** (or auto ~every 20h) writes a ZIP into HeatWave (`backup_archives`, last 7 kept).
+3. **Google Drive (recommended):** nightly at 1:00 am Asia/Colombo uploads `Nethraloka-Daily-….zip` and deletes yesterday’s Drive file after success (see Backup & Settings + `docs/HOSTING.md`).
+4. Still keep an occasional USB download.
+5. Restore into HeatWave with `STORE_FILES_IN_DB=1` and `node scripts/restore-from-backup.mjs <zip>`.
+
+**Local PC**
+
 1. Open **Backup & Settings**.
 2. Click **Backup now**, then **Download**.
 3. Keep a copy on Google Drive / OneDrive / USB.
-4. In cloud mode, the app also auto-backs up when the last ZIP is stale (~20h).
-
-Restore: `node scripts/restore-from-backup.mjs <zip>` with `STORE_FILES_IN_DB=1` for cloud.
+4. Restore: `node scripts/restore-from-backup.mjs <zip>`
 
 ## Login password
 
