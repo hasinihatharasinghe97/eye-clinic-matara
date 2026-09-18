@@ -71,7 +71,7 @@ Repo: https://github.com/hasinihatharasinghe97/eye-clinic-matara — push `main`
 
 | Field | Value |
 |--------|--------|
-| Build | `npm ci && npm ci --prefix server && npm ci --prefix client && npm run build --prefix client` |
+| Build | `npm run build:render` |
 | Start | `node server/src/index.js` |
 | Plan | Free |
 
