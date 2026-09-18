@@ -21,15 +21,17 @@ export function toWhatsAppNumber(raw: string, defaultCountry = '94'): string | n
   return digits;
 }
 
-/** Opens WhatsApp Web / app chat with pre-filled text (no file — WhatsApp URLs cannot attach PDFs). */
 export function whatsAppChatUrl(phoneDigits: string, message: string): string {
-  const text = encodeURIComponent(message);
-  return `https://wa.me/${phoneDigits}?text=${text}`;
+  const text = String(message || '').trim();
+  if (!text) return `https://wa.me/${phoneDigits}`;
+  return `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`;
 }
 
 /** Native app deep link — often opens the WhatsApp app chat faster on phones. */
 export function whatsAppAppLink(phoneDigits: string, message: string): string {
-  return `whatsapp://send?phone=${phoneDigits}&text=${encodeURIComponent(message)}`;
+  const text = String(message || '').trim();
+  if (!text) return `whatsapp://send?phone=${phoneDigits}`;
+  return `whatsapp://send?phone=${phoneDigits}&text=${encodeURIComponent(text)}`;
 }
 
 export function canShareFiles(): boolean {

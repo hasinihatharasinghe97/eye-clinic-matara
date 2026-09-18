@@ -667,7 +667,6 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       {active === 'whatsapp' && (
         <SendMedicineWhatsApp
           patient={patient}
-          attachments={files}
           busy={uploading}
           onPatientUpdated={(p) => setPatient(p)}
         />
