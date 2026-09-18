@@ -223,7 +223,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
 
       {error && <p className="error">{error}</p>}
 
-      <div className="tabs patient-tabs" role="tablist" aria-label="Patient sections">
+      <div className="tabs">
         <button
           type="button"
           className={active === 'visits' ? 'active' : ''}
@@ -270,7 +270,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
 
       {active === 'visits' && (
         <div className="card">
-          <div className="section-toolbar">
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <h3 style={{ margin: 0 }}>Eye screening visits</h3>
             <button
               className="btn"
@@ -288,86 +288,49 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               onAction={() => onNavigate(`/patients/${patientId}/visits/new`)}
             />
           ) : (
-            <>
-              <div className="table-wrap desktop-only">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Diagnosis</th>
-                      <th>IOP</th>
-                      <th></th>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Diagnosis</th>
+                    <th>IOP</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visits.map((v) => (
+                    <tr key={v.id}>
+                      <td>{v.visitDate}</td>
+                      <td>{v.diagnosis || '—'}</td>
+                      <td>{formatIop(v.iop)}</td>
+                      <td className="row">
+                        <button
+                          className="btn secondary"
+                          type="button"
+                          onClick={() =>
+                            onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)
+                          }
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn danger"
+                          type="button"
+                          onClick={async () => {
+                            if (!confirm('Delete this visit?')) return;
+                            await api.deleteVisit(patientId, v.id);
+                            await load();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {visits.map((v) => (
-                      <tr key={v.id}>
-                        <td>{v.visitDate}</td>
-                        <td>{v.diagnosis || '—'}</td>
-                        <td>{formatIop(v.iop)}</td>
-                        <td className="row">
-                          <button
-                            className="btn secondary"
-                            type="button"
-                            onClick={() =>
-                              onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)
-                            }
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn danger"
-                            type="button"
-                            onClick={async () => {
-                              if (!confirm('Delete this visit?')) return;
-                              await api.deleteVisit(patientId, v.id);
-                              await load();
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <ul className="mobile-list mobile-only">
-                {visits.map((v) => (
-                  <li key={v.id} className="mobile-list-card">
-                    <button
-                      type="button"
-                      className="mobile-list-item"
-                      onClick={() => onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)}
-                    >
-                      <span className="mobile-list-title">{v.visitDate}</span>
-                      <span className="mobile-list-meta">{v.diagnosis || 'No diagnosis'}</span>
-                      <span className="mobile-list-meta">IOP {formatIop(v.iop)}</span>
-                    </button>
-                    <div className="mobile-list-actions">
-                      <button
-                        className="btn secondary"
-                        type="button"
-                        onClick={() => onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn danger"
-                        type="button"
-                        onClick={async () => {
-                          if (!confirm('Delete this visit?')) return;
-                          await api.deleteVisit(patientId, v.id);
-                          await load();
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -395,11 +358,11 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 to mark their diseases.
               </p>
             )}
-            <div className="section-toolbar stack-on-mobile" style={{ marginTop: '0.75rem' }}>
+            <div className="row" style={{ marginTop: '0.75rem' }}>
               <select
-                className="field-control"
                 value={newFormType}
                 onChange={(e) => setNewFormType(e.target.value)}
+                style={{ minWidth: 220 }}
               >
                 {availableForms.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -420,7 +383,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 New assessment
               </button>
             </div>
-            <div className="quick-action-grid" style={{ marginTop: '1rem' }}>
+            <div className="check-grid" style={{ marginTop: '1rem' }}>
               {availableForms.map((f) => (
                 <button
                   key={f.id}
@@ -439,10 +402,9 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
           </div>
 
           <div className="card">
-            <div className="section-toolbar">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
               <h3 style={{ margin: 0 }}>Saved assessments</h3>
               <select
-                className="field-control"
                 value={filterFormType}
                 onChange={(e) => setFilterFormType(e.target.value)}
               >
@@ -457,97 +419,51 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             {filteredAssessments.length === 0 ? (
               <p className="empty">No disease assessments yet.</p>
             ) : (
-              <>
-                <div className="table-wrap desktop-only">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Form</th>
-                        <th>Eye</th>
-                        <th></th>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Form</th>
+                      <th>Eye</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAssessments.map((a) => (
+                      <tr key={a.id}>
+                        <td>{formatWhen(a.assessmentDate)}</td>
+                        <td>{diseaseFormTitle(a.formType)}</td>
+                        <td>{a.eye || '—'}</td>
+                        <td className="row">
+                          <button
+                            className="btn secondary"
+                            type="button"
+                            onClick={() =>
+                              onNavigate(
+                                `/patients/${patientId}/diseases/${encodeURIComponent(a.formType)}/${a.id}/edit`
+                              )
+                            }
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn danger"
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm('Delete this assessment?')) return;
+                              await api.deleteDiseaseAssessment(patientId, a.id);
+                              await load();
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAssessments.map((a) => (
-                        <tr key={a.id}>
-                          <td>{formatWhen(a.assessmentDate)}</td>
-                          <td>{diseaseFormTitle(a.formType)}</td>
-                          <td>{a.eye || '—'}</td>
-                          <td className="row">
-                            <button
-                              className="btn secondary"
-                              type="button"
-                              onClick={() =>
-                                onNavigate(
-                                  `/patients/${patientId}/diseases/${encodeURIComponent(a.formType)}/${a.id}/edit`
-                                )
-                              }
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="btn danger"
-                              type="button"
-                              onClick={async () => {
-                                if (!confirm('Delete this assessment?')) return;
-                                await api.deleteDiseaseAssessment(patientId, a.id);
-                                await load();
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <ul className="mobile-list mobile-only">
-                  {filteredAssessments.map((a) => (
-                    <li key={a.id} className="mobile-list-card">
-                      <button
-                        type="button"
-                        className="mobile-list-item"
-                        onClick={() =>
-                          onNavigate(
-                            `/patients/${patientId}/diseases/${encodeURIComponent(a.formType)}/${a.id}/edit`
-                          )
-                        }
-                      >
-                        <span className="mobile-list-title">{diseaseFormTitle(a.formType)}</span>
-                        <span className="mobile-list-meta">
-                          {formatWhen(a.assessmentDate)} · Eye {a.eye || '—'}
-                        </span>
-                      </button>
-                      <div className="mobile-list-actions">
-                        <button
-                          className="btn secondary"
-                          type="button"
-                          onClick={() =>
-                            onNavigate(
-                              `/patients/${patientId}/diseases/${encodeURIComponent(a.formType)}/${a.id}/edit`
-                            )
-                          }
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn danger"
-                          type="button"
-                          onClick={async () => {
-                            if (!confirm('Delete this assessment?')) return;
-                            await api.deleteDiseaseAssessment(patientId, a.id);
-                            await load();
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>
@@ -611,7 +527,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 />
               </div>
             </div>
-            <button className="btn" type="submit" style={{ marginTop: '0.75rem', width: '100%' }}>
+            <button className="btn" type="submit" style={{ marginTop: '0.75rem' }}>
               Add to timeline
             </button>
           </form>
@@ -621,76 +537,44 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             {logs.length === 0 ? (
               <p className="empty">No progress rows yet.</p>
             ) : (
-              <>
-                <div className="table-wrap desktop-only">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>R notes</th>
-                        <th>R score</th>
-                        <th>L notes</th>
-                        <th>L score</th>
-                        <th></th>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>R notes</th>
+                      <th>R score</th>
+                      <th>L notes</th>
+                      <th>L score</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log) => (
+                      <tr key={log.id}>
+                        <td>{log.logDate}</td>
+                        <td>{log.rightEye || '—'}</td>
+                        <td>{log.rightScore ?? '—'}</td>
+                        <td>{log.leftEye || '—'}</td>
+                        <td>{log.leftScore ?? '—'}</td>
+                        <td>
+                          <button
+                            className="btn danger"
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm('Delete this progress entry?')) return;
+                              await api.deleteProgress(patientId, log.id);
+                              await load();
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((log) => (
-                        <tr key={log.id}>
-                          <td>{log.logDate}</td>
-                          <td>{log.rightEye || '—'}</td>
-                          <td>{log.rightScore ?? '—'}</td>
-                          <td>{log.leftEye || '—'}</td>
-                          <td>{log.leftScore ?? '—'}</td>
-                          <td>
-                            <button
-                              className="btn danger"
-                              type="button"
-                              onClick={async () => {
-                                if (!confirm('Delete this progress entry?')) return;
-                                await api.deleteProgress(patientId, log.id);
-                                await load();
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <ul className="mobile-list mobile-only">
-                  {logs.map((log) => (
-                    <li key={log.id} className="mobile-list-card">
-                      <div className="mobile-list-item static">
-                        <span className="mobile-list-title">{log.logDate}</span>
-                        <span className="mobile-list-meta">
-                          R: {log.rightEye || '—'}
-                          {log.rightScore != null ? ` (score ${log.rightScore})` : ''}
-                        </span>
-                        <span className="mobile-list-meta">
-                          L: {log.leftEye || '—'}
-                          {log.leftScore != null ? ` (score ${log.leftScore})` : ''}
-                        </span>
-                      </div>
-                      <div className="mobile-list-actions">
-                        <button
-                          className="btn danger"
-                          type="button"
-                          onClick={async () => {
-                            if (!confirm('Delete this progress entry?')) return;
-                            await api.deleteProgress(patientId, log.id);
-                            await load();
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </>
@@ -698,9 +582,9 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
 
       {active === 'images' && (
         <div className="card">
-          <div className="section-toolbar">
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <h3 style={{ margin: 0 }}>Report images</h3>
-            <div className="section-toolbar-actions">
+            <div className="row">
               <button
                 className="btn"
                 type="button"
@@ -709,7 +593,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               >
                 Take photo
               </button>
-              <label className={`btn secondary upload-btn${uploading ? ' is-disabled' : ''}`}>
+              <label className="btn secondary" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
                 {uploading ? 'Uploading…' : 'Upload image / PDF'}
                 <input
                   type="file"
@@ -738,20 +622,26 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                       <img src={f.url} alt={f.originalName} />
                     </a>
                   ) : (
-                    <div className="gallery-pdf">
+                    <div
+                      style={{
+                        height: 120,
+                        display: 'grid',
+                        placeItems: 'center',
+                        background: '#eee',
+                      }}
+                    >
                       <a href={f.url} target="_blank" rel="noreferrer">
                         PDF
                       </a>
                     </div>
                   )}
                   <div className="meta">
-                    <div className="gallery-name" title={f.originalName}>
-                      {f.originalName}
-                    </div>
+                    <div title={f.originalName}>{f.originalName}</div>
                     <div className="muted">{new Date(f.createdAt).toLocaleString()}</div>
                     <button
                       className="btn danger"
                       type="button"
+                      style={{ marginTop: '0.35rem' }}
                       onClick={async () => {
                         if (!confirm('Delete this file?')) return;
                         await api.deleteAttachment(patientId, f.id);

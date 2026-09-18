@@ -3,8 +3,9 @@ import { api, type Attachment, type Patient } from '../api';
 import {
   defaultMedicineMessage,
   downloadFile,
+  openWhatsAppChat,
+  sharePdfToWhatsApp,
   toWhatsAppNumber,
-  whatsAppChatUrl,
 } from '../whatsapp';
 
 const MEDICINE_MAX = 200;
@@ -68,6 +69,7 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
     setSelectedAttachmentId('');
   }, [patient.id, patient.name, patient.phone, patient.medicinesSent]);
 
+  // When attachments load, auto-pick the only PDF (if any)
   useEffect(() => {
     if (pickedFile || selectedAttachmentId) return;
     if (pdfAttachments.length !== 1) return;
@@ -87,17 +89,6 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
   const waNumber = toWhatsAppNumber(phone);
   const sentSet = useMemo(() => new Set(sent), [sent]);
   const alreadySent = medicineNo !== '' && sentSet.has(medicineNo);
-
-  const chatMessage =
-    message.trim() ||
-    defaultMedicineMessage(
-      patient.name,
-      undefined,
-      medicineNo === '' ? undefined : medicineNo
-    );
-
-  const chatUrl = waNumber ? whatsAppChatUrl(waNumber, chatMessage) : '';
-  const canSend = Boolean(waNumber && medicineNo !== '' && !sending && !busy);
 
   async function persistSent(next: number[]) {
     const normalized = sortedUnique(next);
@@ -141,37 +132,14 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
     if (n != null) setMedicineNo(n);
   }
 
-  /** Runs after the real WhatsApp <a href> navigation has started. */
-  async function afterWhatsAppOpened() {
-    if (medicineNo === '') return;
-    setSending(true);
-    setError('');
-    try {
-      const file = await resolvePdfFile();
-      if (file) downloadFile(file);
-      await persistSent([...sent, medicineNo]);
-      setStatus(
-        file
-          ? `WhatsApp opened for +${waNumber}. PDF downloaded — tap 📎 in WhatsApp and choose the file.`
-          : `WhatsApp opened for +${waNumber}. Select a PDF next time to auto-download it for attaching.`
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not prepare the PDF');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  function onSendClick(e: React.MouseEvent<HTMLAnchorElement>) {
+  async function send() {
     setError('');
     setStatus('');
     if (!waNumber) {
-      e.preventDefault();
       setError('Enter a valid WhatsApp number (e.g. 0771234567 or +94 77 123 4567).');
       return;
     }
     if (medicineNo === '') {
-      e.preventDefault();
       setError('Select the medicine PDF number (1–200) before sending.');
       return;
     }
@@ -179,23 +147,63 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
       const ok = window.confirm(
         `Medicine #${medicineNo} was already marked as sent to this patient. Send again anyway?`
       );
-      if (!ok) {
-        e.preventDefault();
+      if (!ok) return;
+    }
+
+    const msg = message.trim() || defaultMedicineMessage(patient.name, undefined, medicineNo);
+    const title = `Medicine #${medicineNo} — ${patient.name}`;
+
+    setSending(true);
+    try {
+      const file = await resolvePdfFile();
+      if (!file) {
+        setError(
+          'Select a medicine PDF from this device, or choose one already on file for this patient.'
+        );
         return;
       }
+
+      // Preferred (phones): system share sheet with the PDF → pick WhatsApp
+      const shareResult = await sharePdfToWhatsApp({
+        file,
+        message: msg,
+        title,
+        phoneHint: waNumber,
+      });
+      if (shareResult === 'aborted') {
+        setStatus('Share cancelled — medicine not marked.');
+        return;
+      }
+      if (shareResult === 'shared') {
+        await persistSent([...sent, medicineNo]);
+        setStatus(
+          `PDF ready in share — tap WhatsApp, then ${patient.name} (+${waNumber}). Medicine #${medicineNo} marked as sent.`
+        );
+        return;
+      }
+
+      // Fallback (computers / no file-share): open chat + download PDF to attach
+      downloadFile(file);
+      openWhatsAppChat(waNumber, msg);
+      await persistSent([...sent, medicineNo]);
+      setStatus(
+        `WhatsApp opened for +${waNumber}. Attach the downloaded PDF with the paperclip.`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not prepare WhatsApp send');
+    } finally {
+      setSending(false);
     }
-    // Important: do not preventDefault — browser must follow href to open WhatsApp.
-    void afterWhatsAppOpened();
   }
 
-  function onChatOnlyClick(e: React.MouseEvent<HTMLAnchorElement>) {
+  function openChatOnly() {
     setError('');
     if (!waNumber) {
-      e.preventDefault();
       setError('Enter a valid WhatsApp number (e.g. 0771234567).');
       return;
     }
-    setStatus(`Opening WhatsApp chat for +${waNumber}…`);
+    openWhatsAppChat(waNumber, message);
+    setStatus(`WhatsApp chat opened for +${waNumber}.`);
   }
 
   const numbers = useMemo(() => Array.from({ length: MEDICINE_MAX }, (_, i) => i + 1), []);
@@ -204,9 +212,9 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Send medicine PDF on WhatsApp</h3>
       <p className="muted">
-        Phone is filled from the patient record. Tap a medicine number, then{' '}
-        <strong>Send PDF via WhatsApp</strong> — WhatsApp opens that patient’s chat and the PDF
-        downloads so you can attach it with the paperclip.
+        Tap a medicine number, then <strong>Send PDF via WhatsApp</strong>. On your phone this opens
+        the share sheet with the PDF — choose <strong>WhatsApp</strong> and the patient. (The number
+        shown above is filled from their record so you can pick the right chat.)
       </p>
 
       <div className="grid-2">
@@ -315,28 +323,23 @@ export function SendMedicineWhatsApp({ patient, attachments, busy, onPatientUpda
       {error && <p className="error">{error}</p>}
       {status && <p className="success">{status}</p>}
 
-      <div className="row whatsapp-actions" style={{ marginTop: '0.85rem', flexWrap: 'wrap' }}>
-        {/* Real <a href> — phones block fake/programmatic WhatsApp opens */}
-        <a
-          className={`btn${canSend ? '' : ' is-disabled'}`}
-          href={canSend ? chatUrl : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!canSend}
-          onClick={onSendClick}
+      <div className="row" style={{ marginTop: '0.85rem', flexWrap: 'wrap' }}>
+        <button
+          className="btn"
+          type="button"
+          disabled={sending || busy || !waNumber || medicineNo === ''}
+          onClick={() => void send()}
         >
           {sending ? 'Preparing…' : 'Send PDF via WhatsApp'}
-        </a>
-        <a
-          className={`btn secondary${waNumber && !sending && !busy ? '' : ' is-disabled'}`}
-          href={waNumber ? whatsAppChatUrl(waNumber, chatMessage) : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!waNumber || sending || busy}
-          onClick={onChatOnlyClick}
+        </button>
+        <button
+          className="btn secondary"
+          type="button"
+          disabled={sending || busy || !waNumber}
+          onClick={openChatOnly}
         >
           Open WhatsApp chat only
-        </a>
+        </button>
         {medicineNo !== '' && (
           <>
             <button

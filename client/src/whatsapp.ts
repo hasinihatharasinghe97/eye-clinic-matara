@@ -21,19 +21,126 @@ export function toWhatsAppNumber(raw: string, defaultCountry = '94'): string | n
   return digits;
 }
 
-/** HTTPS link that opens WhatsApp to a specific chat (works from a real <a href>). */
+/** Opens WhatsApp Web / app chat with pre-filled text (no file — WhatsApp URLs cannot attach PDFs). */
 export function whatsAppChatUrl(phoneDigits: string, message: string): string {
   const text = encodeURIComponent(message);
   return `https://wa.me/${phoneDigits}?text=${text}`;
 }
 
-/** Native app deep link (Android / some iOS cases). */
-export function whatsAppAppUrl(phoneDigits: string, message: string): string {
-  const text = encodeURIComponent(message);
-  return `whatsapp://send?phone=${phoneDigits}&text=${text}`;
+/** Native app deep link — often opens the WhatsApp app chat faster on phones. */
+export function whatsAppAppLink(phoneDigits: string, message: string): string {
+  return `whatsapp://send?phone=${phoneDigits}&text=${encodeURIComponent(message)}`;
 }
 
-/** Trigger a PDF download so the doctor can attach it in WhatsApp. */
+export function canShareFiles(): boolean {
+  try {
+    return typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  } catch {
+    return false;
+  }
+}
+
+export function canSharePdfFile(file: File): boolean {
+  if (!canShareFiles()) return false;
+  try {
+    if (typeof navigator.canShare !== 'function') return true;
+    return navigator.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+export async function sharePdfToWhatsApp(opts: {
+  file: File;
+  message: string;
+  title?: string;
+  phoneHint?: string;
+}): Promise<'shared' | 'unsupported' | 'aborted'> {
+  const { file, message, title, phoneHint } = opts;
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+    return 'unsupported';
+  }
+
+  const pdf =
+    file.type === 'application/pdf'
+      ? file
+      : new File([file], file.name || 'medicine.pdf', { type: 'application/pdf' });
+
+  const text = phoneHint ? `${message}\n\n(Patient WhatsApp: +${phoneHint})` : message;
+
+  const withFiles: ShareData = {
+    title: title || 'Medicine PDF',
+    text,
+    files: [pdf],
+  };
+
+  try {
+    // Prefer sharing the file (opens share sheet → WhatsApp with PDF)
+    if (typeof navigator.canShare !== 'function' || navigator.canShare(withFiles)) {
+      await navigator.share(withFiles);
+      return 'shared';
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return 'aborted';
+    // fall through and try without canShare gate
+  }
+
+  try {
+    await navigator.share(withFiles);
+    return 'shared';
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return 'aborted';
+    return 'unsupported';
+  }
+}
+
+/**
+ * Open WhatsApp chat with this phone + message.
+ * Must be called from a user tap when possible; pass a pre-opened window if you opened
+ * `about:blank` synchronously before any `await`.
+ */
+export function openWhatsAppChat(phoneDigits: string, message: string, preOpened?: Window | null) {
+  const httpsUrl = whatsAppChatUrl(phoneDigits, message);
+  const appUrl = whatsAppAppLink(phoneDigits, message);
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (preOpened && !preOpened.closed) {
+    preOpened.location.href = isMobile ? appUrl : httpsUrl;
+    // If the app link fails on some devices, fall back shortly via https in the same window
+    if (isMobile) {
+      setTimeout(() => {
+        try {
+          if (preOpened && !preOpened.closed) preOpened.location.href = httpsUrl;
+        } catch {
+          /* ignore */
+        }
+      }, 800);
+    }
+    return;
+  }
+
+  // Programmatic <a click> is more reliable than window.open after async work
+  const a = document.createElement('a');
+  a.href = isMobile ? appUrl : httpsUrl;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  if (isMobile) {
+    setTimeout(() => {
+      const fallback = document.createElement('a');
+      fallback.href = httpsUrl;
+      fallback.target = '_blank';
+      fallback.rel = 'noopener noreferrer';
+      document.body.appendChild(fallback);
+      fallback.click();
+      fallback.remove();
+    }, 900);
+  }
+}
+
 export function downloadFile(file: File) {
   const url = URL.createObjectURL(file);
   const a = document.createElement('a');

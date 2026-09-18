@@ -187,42 +187,10 @@ textarea {
   margin-bottom: 1rem;
 }
 
-.page-toolbar-actions,
-.section-toolbar-actions {
+.page-toolbar-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-}
-
-.section-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.field-control {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.55rem 0.65rem;
-  background: #fff;
-  color: var(--ink);
-  font: inherit;
-  min-height: 44px;
-  max-width: 100%;
-}
-
-.quick-action-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.5rem;
-}
-
-.quick-action-grid .btn {
-  width: 100%;
-  justify-content: center;
 }
 
 .patient-header {
@@ -249,14 +217,7 @@ textarea {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-}
-
-.mobile-list-card {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
-  overflow: hidden;
+  gap: 0.5rem;
 }
 
 .mobile-list-item {
@@ -266,8 +227,9 @@ textarea {
   align-items: flex-start;
   gap: 0.2rem;
   text-align: left;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
   padding: 0.85rem 0.95rem;
   cursor: pointer;
   font: inherit;
@@ -275,17 +237,7 @@ textarea {
   min-height: 44px;
 }
 
-.mobile-list > li:not(.mobile-list-card) > .mobile-list-item {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
-}
-
-.mobile-list-item.static {
-  cursor: default;
-}
-
-.mobile-list-item:not(.static):active {
+.mobile-list-item:active {
   background: var(--accent-soft);
 }
 
@@ -298,59 +250,6 @@ textarea {
   color: var(--muted);
   font-size: 0.85rem;
   line-height: 1.35;
-  word-break: break-word;
-}
-
-.mobile-list-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  padding: 0 0.85rem 0.85rem;
-}
-
-.mobile-list-actions .btn {
-  flex: 1 1 auto;
-  min-height: 42px;
-}
-
-.upload-btn {
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.upload-btn.is-disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.gallery-pdf {
-  height: 120px;
-  display: grid;
-  place-items: center;
-  background: #eee;
-}
-
-.gallery-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gallery-item .meta .btn {
-  margin-top: 0.35rem;
-  width: 100%;
-}
-
-.code-block {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  background: #f7f4ed;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.75rem;
 }
 
 @media (max-width: 720px) {
@@ -440,56 +339,19 @@ textarea {
   }
 
   .page-toolbar-actions,
-  .patient-header-actions,
-  .section-toolbar-actions {
+  .patient-header-actions {
     width: 100%;
   }
 
   .page-toolbar-actions .btn,
-  .patient-header-actions .btn,
-  .section-toolbar-actions .btn,
-  .section-toolbar-actions .upload-btn {
+  .patient-header-actions .btn {
     flex: 1 1 calc(50% - 0.25rem);
     min-height: 44px;
     justify-content: center;
   }
 
-  .section-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .section-toolbar .field-control,
-  .stack-on-mobile .field-control {
-    width: 100%;
-  }
-
-  .stack-on-mobile {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .stack-on-mobile .btn {
-    width: 100%;
-  }
-
   .patient-header {
     flex-direction: column;
-  }
-
-  .patient-tabs {
-    position: sticky;
-    top: 3.6rem;
-    z-index: 15;
-    margin: 0 -0.75rem 0.85rem;
-    padding: 0.45rem 0.75rem;
-    background: rgba(247, 244, 237, 0.97);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--line);
-  }
-
-  .quick-action-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search {
@@ -515,8 +377,7 @@ textarea {
   .field input,
   .field select,
   .field textarea,
-  .search input,
-  .field-control {
+  .search input {
     font-size: 16px; /* reduces iOS zoom-on-focus */
   }
 
@@ -581,15 +442,11 @@ textarea {
   }
 
   .chart-frame {
-    height: 220px;
+    height: 240px;
   }
 
   .vf-svg {
     width: min(260px, 78vw);
-  }
-
-  .page-nav {
-    margin-top: 0;
   }
 
   .page-nav-row {
@@ -599,18 +456,6 @@ textarea {
 
   .btn-back {
     min-height: 44px;
-    width: 100%;
-  }
-
-  .breadcrumbs {
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .breadcrumbs ol {
-    flex-wrap: nowrap;
-    white-space: nowrap;
   }
 
   .medicine-grid {
@@ -649,11 +494,6 @@ textarea {
 
   .camera-modal {
     padding: 0.85rem;
-    width: min(100%, 100vw - 1.5rem);
-  }
-
-  .followup-table {
-    min-width: 560px;
   }
 }
 
@@ -715,23 +555,6 @@ textarea {
   border-radius: 8px;
   padding: 0.45rem 0.85rem;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  box-sizing: border-box;
-}
-
-a.btn:hover {
-  text-decoration: none;
-  filter: brightness(1.05);
-}
-
-a.btn.is-disabled,
-.btn.is-disabled {
-  opacity: 0.55;
-  pointer-events: none;
-  cursor: not-allowed;
 }
 
 .btn:hover {
