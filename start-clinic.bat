@@ -1,5 +1,5 @@
 @echo off
-title Eye Clinic Matara
+title Nethraloka Ayurvedic Eye Clinic
 cd /d "%~dp0"
 
 where node >nul 2>&1
@@ -40,7 +40,7 @@ if not exist "client\node_modules" (
 )
 
 echo.
-echo Stopping any previous Eye Clinic servers...
+echo Stopping any previous clinic servers...
 powershell -NoProfile -Command ^
   "$root = (Resolve-Path '.').Path; " ^
   "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | " ^
@@ -54,9 +54,9 @@ powershell -NoProfile -Command ^
   "}"
 timeout /t 2 /nobreak >nul
 
-echo Starting Eye Clinic system...
+echo Starting Nethraloka Ayurvedic Eye Clinic...
 echo Open http://localhost:5173 in your browser
-echo Login password is set under Backup ^& Settings ^(default on first install: clinic123^)
+echo Set the login password under Backup ^& Settings after first sign-in.
 echo.
 echo Press Ctrl+C in this window to stop the system.
 echo.

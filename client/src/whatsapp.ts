@@ -55,6 +55,6 @@ export async function sharePdfToWhatsApp(opts: {
   }
 }
 
-export function defaultMedicineMessage(patientName: string, clinic = 'Eye Clinic, District Ayurvedic Hospital Matara') {
+export function defaultMedicineMessage(patientName: string, clinic = 'Nethraloka Ayurvedic Eye Clinic') {
   return `Dear ${patientName},\n\nPlease find your medicine details from ${clinic}.\n\nThank you.`;
 }

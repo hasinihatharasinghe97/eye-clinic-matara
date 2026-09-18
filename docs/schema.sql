@@ -1,4 +1,4 @@
--- MySQL schema for the Eye Clinic Patient System
+-- MySQL schema for Nethraloka Ayurvedic Eye Clinic
 -- Tables are also created automatically by server/src/db.js on startup.
 
 CREATE DATABASE IF NOT EXISTS eye_clinic

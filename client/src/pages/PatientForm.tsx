@@ -163,7 +163,7 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
           <textarea
             value={form.address || ''}
             onChange={(e) => set('address', e.target.value)}
-            placeholder="e.g. Matara"
+            placeholder="e.g. town or village"
           />
         </div>
       </div>

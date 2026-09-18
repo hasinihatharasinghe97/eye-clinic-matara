@@ -1,4 +1,4 @@
-# Eye Clinic Patient System — District Ayurvedic Hospital Matara
+# Nethraloka Ayurvedic Eye Clinic — Patient System
 
 Patient records, visit history, improvement tracking, and report image uploads for the eye clinic.
 
@@ -25,7 +25,7 @@ $env:MYSQL_DATABASE="eye_clinic"
 3. Open the `eye-clinic` folder.
 4. Double-click **`start-clinic.bat`** (first run installs dependencies).
 5. Open **http://localhost:5173**
-6. Sign in with password: **`clinic123`** (change it under Backup & Settings).
+6. Sign in (set or change the password under **Backup & Settings**).
 
 Or from a terminal:
 
@@ -105,10 +105,11 @@ data/
 
 Restore: `node scripts/restore-from-backup.mjs <zip>` with `STORE_FILES_IN_DB=1` for cloud.
 
-## Default password
+## Login password
 
-- Initial password: `clinic123`
-- Change it on the Backup & Settings page (and set `CLINIC_PASSWORD` on Render).
+- Set `CLINIC_PASSWORD` on Render (and optionally in local `.env`).
+- Change it anytime under **Backup & Settings**.
+- Do not share the password in screenshots or public docs.
 
 ## Project layout
 

@@ -64,7 +64,7 @@ export function StatsPage() {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Clinic statistics</h2>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Overall patient load, disease mix, and activity for District Ayurvedic Hospital — Matara Eye Clinic.
+          Overall patient load, disease mix, and activity for Nethraloka Ayurvedic Eye Clinic.
         </p>
       </div>
 

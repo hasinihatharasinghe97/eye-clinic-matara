@@ -72,7 +72,7 @@ async function collectZipToBuffer() {
 
   archive.append(
     [
-      'Eye Clinic Matara — Backup ZIP',
+      'Nethraloka Ayurvedic Eye Clinic — Backup ZIP',
       '',
       'Contents:',
       '  snapshot.json  — full database export (restore source)',

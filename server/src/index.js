@@ -66,7 +66,7 @@ app.get('/api/health', async (_req, res) => {
   }
   res.status(dbOk ? 200 : 503).json({
     ok: dbOk,
-    clinic: 'District Ayurvedic Hospital Matara — Eye Clinic',
+    clinic: 'Nethraloka Ayurvedic Eye Clinic',
     cloud: IS_CLOUD,
     dbMs,
   });
@@ -102,11 +102,11 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.warn('[db] custom form id migration skipped:', err.message || err);
   }
   const settings = await getSettings();
-  console.log(`Eye Clinic API listening on http://0.0.0.0:${PORT}`);
+  console.log(`Nethraloka Ayurvedic Eye Clinic API listening on http://0.0.0.0:${PORT}`);
   console.log(
     `Mode: MySQL${IS_CLOUD ? ' (files stored in DB)' : ' (uploads/backups on disk)'}`
   );
   console.log(`Backup folder: ${settings.backupFolder}`);
-  console.log('Login password: use Backup & Settings (default on first install is clinic123)');
+  console.log('Login password: change under Backup & Settings');
   startDailyBackupScheduler();
 });

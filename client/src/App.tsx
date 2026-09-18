@@ -214,8 +214,8 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        <h1>Eye Clinic Matara</h1>
-        <p className="muted">District Ayurvedic Hospital — Aparekka</p>
+        <h1>Nethraloka Ayurvedic Eye Clinic</h1>
+        <p className="muted">Sign in to continue</p>
         <div className="field" style={{ marginTop: '1rem' }}>
           <label htmlFor="password">Clinic password</label>
           <input
@@ -231,9 +231,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         <button className="btn" type="submit" disabled={busy} style={{ marginTop: '0.85rem', width: '100%' }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <p className="muted" style={{ marginTop: '0.85rem', fontSize: '0.82rem' }}>
-          Default password: clinic123 — change it under Backup &amp; Settings.
-        </p>
       </form>
     </div>
   );
@@ -520,8 +517,8 @@ export default function App() {
           onClick={() => navigate('/')}
           title="Go to patient list"
         >
-          <strong>District Ayurvedic Hospital — Matara</strong>
-          <span>Eye Clinic Patient System</span>
+          <strong>Nethraloka Ayurvedic Eye Clinic</strong>
+          <span>Patient System</span>
         </button>
         <nav className="nav-links">
           <a
