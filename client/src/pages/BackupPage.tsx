@@ -100,26 +100,24 @@ export function BackupPage() {
           <>
             <p className="muted" style={{ marginBottom: '0.75rem' }}>
               This clinic runs on <strong>Render</strong> (app) + <strong>Oracle HeatWave MySQL</strong>{' '}
-              (database). Live patient records, photos/PDFs, and ZIP backups all live in HeatWave —
-              Render’s free disk is temporary and is not used for clinic data.
+              (database). Live patient records and photos/PDFs live in HeatWave. The important{' '}
+              <strong>daily offsite ZIP</strong> goes to <strong>Google Drive</strong> (not kept again
+              in HeatWave). Render’s free disk is temporary and is not used for clinic data.
             </p>
             <ul className="muted" style={{ margin: '0 0 0.75rem', paddingLeft: '1.25rem' }}>
               <li>
-                <strong>Backup now</strong> builds a ZIP (<code>snapshot.json</code> +{' '}
-                <code>uploads/</code>) and stores it in the HeatWave table{' '}
-                <code>backup_archives</code>.
+                <strong>Google Drive (recommended):</strong> every night at 1:00&nbsp;am Asia/Colombo
+                uploads <code>Nethraloka-Daily-….zip</code> to Drive only, then deletes yesterday’s
+                Drive file.
               </li>
               <li>
-                The server also auto-creates a ZIP when the last one is older than ~20 hours (about 5
-                minutes after Render wakes from sleep).
+                <strong>Backup now</strong> is optional — it stores a ZIP in HeatWave (
+                <code>backup_archives</code>) so you can download it from this page or keep a USB
+                copy. Last {keep} HeatWave ZIPs are kept.
               </li>
               <li>
-                Only the last <strong>{keep}</strong> ZIPs are kept in HeatWave (older ones are
-                deleted to save the free 50&nbsp;GB).
-              </li>
-              <li>
-                Configure <strong>Google Drive daily upload</strong> below so a copy leaves Oracle
-                every night at 1:00&nbsp;am (Asia/Colombo).
+                If Drive is not set up yet, the server may also auto-create a HeatWave ZIP when the
+                last one is older than ~20 hours (after Render wakes).
               </li>
             </ul>
           </>
@@ -229,12 +227,12 @@ BACKUP_CRON_SECRET=long-random-secret`}
         {cloud ? (
           <ol className="muted" style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
             <li>
-              Click <strong>Backup now</strong>, then <strong>Download latest</strong> (ZIP comes
-              from HeatWave through the Render app).
+              Primary offsite copy is <strong>Google Drive daily upload</strong> (above). That is
+              what you restore from if HeatWave is lost.
             </li>
-            <li>Also keep a USB copy weekly if possible.</li>
             <li>
-              Prefer Google Drive auto-upload above so recovery does not depend only on Oracle.
+              Optional: <strong>Backup now</strong> → <strong>Download latest</strong> for a USB /
+              extra copy (those ZIPs live in HeatWave until you download them).
             </li>
           </ol>
         ) : (
@@ -299,15 +297,20 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
       </div>
 
       <div className="card">
-        <h3>{cloud ? 'ZIP backups in HeatWave' : 'Saved backups'}</h3>
+        <h3>{cloud ? 'Optional ZIP backups in HeatWave' : 'Saved backups'}</h3>
         {cloud && (
           <p className="muted" style={{ marginTop: 0 }}>
-            These ZIPs are stored inside Oracle MySQL (not on the Render filesystem). Download any
-            row to keep an offsite copy.
+            These are only from <strong>Backup now</strong> / stale auto-backup — useful for a quick
+            download. Daily Drive uploads are <strong>not</strong> listed here (they are only on
+            Google Drive).
           </p>
         )}
         {backups.length === 0 ? (
-          <p className="empty">No backups yet. Click Backup now to create the first ZIP.</p>
+          <p className="empty">
+            {cloud
+              ? 'No HeatWave ZIPs yet. That is fine if Google Drive daily upload is working — or click Backup now for an optional in-app ZIP.'
+              : 'No backups yet. Click Backup now to create the first ZIP.'}
+          </p>
         ) : (
           <div className="table-wrap">
             <table className="table">
