@@ -4,9 +4,7 @@ import {
   ageBand,
   buildMonthlyActivity,
   extractAssessmentMetrics,
-  extractVisitScreeningMetrics,
   monthKey,
-  parseJson,
 } from '../analytics.js';
 
 const router = Router();
@@ -25,7 +23,7 @@ function parseConditions(value) {
 router.get('/', async (_req, res) => {
   try {
     const patients = await db.prepare('SELECT * FROM patients').all();
-    const visits = await db.prepare('SELECT * FROM visits').all();
+    const attendance = await db.prepare('SELECT * FROM clinic_attendance').all();
     const progress = await db.prepare('SELECT * FROM progress_logs').all();
     const assessments = await db.prepare('SELECT * FROM disease_assessments').all();
 
@@ -57,17 +55,14 @@ router.get('/', async (_req, res) => {
       }
     }
 
-    const visitsByMonth = {};
-    const diagnosisCounts = {};
-    let visitsThisMonth = 0;
-    for (const v of visits) {
-      const m = monthKey(v.visit_date);
+    const attendanceByMonth = {};
+    let attendanceThisMonth = 0;
+    for (const row of attendance) {
+      const m = monthKey(row.visit_date);
       if (m) {
-        visitsByMonth[m] = (visitsByMonth[m] || 0) + 1;
-        if (m === thisMonth) visitsThisMonth += 1;
+        attendanceByMonth[m] = (attendanceByMonth[m] || 0) + 1;
+        if (m === thisMonth) attendanceThisMonth += 1;
       }
-      const diag = String(v.diagnosis || '').trim();
-      if (diag) diagnosisCounts[diag] = (diagnosisCounts[diag] || 0) + 1;
     }
 
     const assessmentsByType = {};
@@ -100,10 +95,10 @@ router.get('/', async (_req, res) => {
     res.json({
       totals: {
         patients: patients.length,
-        visits: visits.length,
+        attendanceDays: attendance.length,
         progressLogs: progress.length,
         assessments: assessments.length,
-        visitsThisMonth,
+        attendanceThisMonth,
         assessmentsThisMonth,
         patientsWithConditions: patients.filter((p) => parseConditions(p.conditions).length > 0)
           .length,
@@ -117,10 +112,9 @@ router.get('/', async (_req, res) => {
         .filter((b) => ageBands[b])
         .map((name) => ({ name, value: ageBands[name] })),
       conditions: toPairs(conditionCounts),
-      diagnoses: toPairs(diagnosisCounts).slice(0, 12),
       assessmentsByType: toPairs(assessmentsByType),
       registrationsByMonth: last12(monthSeries(registrationsByMonth)),
-      visitsByMonth: last12(monthSeries(visitsByMonth)),
+      attendanceByMonth: last12(monthSeries(attendanceByMonth)),
       assessmentsByMonth: last12(monthSeries(assessmentsByMonth)),
     });
   } catch (err) {
@@ -134,8 +128,8 @@ export async function getPatientCharts(patientId) {
   const patient = await db.prepare('SELECT id FROM patients WHERE id = ?').get(patientId);
   if (!patient) return null;
 
-  const visits = await db
-    .prepare('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date ASC')
+  const attendance = await db
+    .prepare('SELECT * FROM clinic_attendance WHERE patient_id = ? ORDER BY visit_date ASC')
     .all(patientId);
   const assessments = await db
     .prepare(
@@ -147,26 +141,11 @@ export async function getPatientCharts(patientId) {
     .all(patientId);
 
   const extracted = extractAssessmentMetrics(assessments);
-  const visitMetrics = extractVisitScreeningMetrics(visits);
-
-  function mergeSeries(a = [], b = []) {
-    return [...a, ...b].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
-  }
 
   return {
     metrics: extracted.metrics,
     series: {
       ...extracted.series,
-      iop: mergeSeries(extracted.series.iop, visitMetrics.iopCombined),
-      iopRight: mergeSeries(extracted.series.iopRight, visitMetrics.iopRight),
-      iopLeft: mergeSeries(extracted.series.iopLeft, visitMetrics.iopLeft),
-      visionRight: mergeSeries(extracted.series.visionRight, visitMetrics.visionRight),
-      visionLeft: mergeSeries(extracted.series.visionLeft, visitMetrics.visionLeft),
-      contrastRight: mergeSeries(extracted.series.contrastRight, visitMetrics.contrastRight),
-      contrastLeft: mergeSeries(extracted.series.contrastLeft, visitMetrics.contrastLeft),
-      nearRight: mergeSeries(extracted.series.nearRight, visitMetrics.nearRight),
-      nearLeft: mergeSeries(extracted.series.nearLeft, visitMetrics.nearLeft),
-      colorVision: mergeSeries(extracted.series.colorVision, visitMetrics.colorVision),
       improvementRight: progress
         .filter((p) => p.right_score != null)
         .map((p) => ({
@@ -186,7 +165,7 @@ export async function getPatientCharts(patientId) {
           eye: 'Left',
         })),
     },
-    activity: buildMonthlyActivity({ visits, assessments, progress }),
+    activity: buildMonthlyActivity({ attendance, assessments, progress }),
     progress: progress.map((p) => ({
       id: p.id,
       date: p.log_date,
@@ -196,7 +175,7 @@ export async function getPatientCharts(patientId) {
       leftScore: p.left_score ?? null,
     })),
     counts: {
-      visits: visits.length,
+      attendance: attendance.length,
       assessments: assessments.length,
       progress: progress.length,
     },

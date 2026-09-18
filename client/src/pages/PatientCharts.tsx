@@ -22,13 +22,9 @@ const UNIT: Record<string, string> = {
   csgs: '',
   improvementRight: '/10',
   improvementLeft: '/10',
-  visionRight: '',
-  visionLeft: '',
   contrastRight: '/10',
   contrastLeft: '/10',
   colorVision: '',
-  nearRight: '',
-  nearLeft: '',
 };
 
 function pairSeries(
@@ -53,7 +49,7 @@ export function PatientChartsPanel({ patientId }: Props) {
   const [data, setData] = useState<PatientCharts | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(true);
-  const [metric, setMetric] = useState('visionRight');
+  const [metric, setMetric] = useState('cmt');
 
   useEffect(() => {
     setBusy(true);
@@ -63,18 +59,18 @@ export function PatientChartsPanel({ patientId }: Props) {
         setData(d);
         setError('');
         const preferred = [
-          'visionRight',
-          'visionLeft',
-          'contrastRight',
-          'iopRight',
-          'nearRight',
-          'colorVision',
-          'improvementRight',
           'cmt',
           'iop',
+          'iopRight',
+          'iopLeft',
           'csgs',
           'hba1c',
           'srf',
+          'contrastRight',
+          'contrastLeft',
+          'colorVision',
+          'improvementRight',
+          'improvementLeft',
         ];
         const first = preferred.find((k) => (d.series[k] || []).length > 0);
         if (first) setMetric(first);
@@ -102,24 +98,16 @@ export function PatientChartsPanel({ patientId }: Props) {
     }));
   }, [data, metric]);
 
-  const visionCompare = useMemo(
-    () => pairSeries(data?.series.visionRight, data?.series.visionLeft),
-    [data]
-  );
-  const contrastCompare = useMemo(
-    () => pairSeries(data?.series.contrastRight, data?.series.contrastLeft),
-    [data]
-  );
-  const nearCompare = useMemo(
-    () => pairSeries(data?.series.nearRight, data?.series.nearLeft),
-    [data]
-  );
   const pressureCompare = useMemo(
     () => pairSeries(data?.series.iopRight, data?.series.iopLeft),
     [data]
   );
   const scoreCompare = useMemo(
     () => pairSeries(data?.series.improvementRight, data?.series.improvementLeft),
+    [data]
+  );
+  const contrastCompare = useMemo(
+    () => pairSeries(data?.series.contrastRight, data?.series.contrastLeft),
     [data]
   );
   const colorPoints = useMemo(() => {
@@ -139,74 +127,41 @@ export function PatientChartsPanel({ patientId }: Props) {
     <>
       <StatKpis
         items={[
-          { label: 'Visits', value: data.counts.visits },
           { label: 'Assessments', value: data.counts.assessments },
           { label: 'Progress entries', value: data.counts.progress },
+          { label: 'Attendance days', value: data.counts.attendance },
         ]}
       />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>How to chart improvement</h3>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Record distance vision, near vision, contrast (1–10), color vision, and IOP (R/L) on each
-          screening visit. Progress-tab scores (0–10) and disease-assessment numbers (CMT, CSGS,
-          HbA1c, SRF) also appear below.
+          Save a <strong>New assessment</strong> on each review visit (CMT, IOP, CSGS, HbA1c, SRF,
+          and follow-up contrast/color). Progress-tab scores (0–10) also appear below. Day attendance
+          uses the Visited today tick.
         </p>
       </div>
 
       <div className="stats-grid">
         <ChartCard
-          title="Vision improvement"
-          subtitle="Distance VA scored 1–10 (higher is better: 6/6 = 10)"
-          empty={visionCompare.length === 0}
-          emptyText="Add distance vision (R/L) on visits to see this chart."
-        >
-          <div className="chart-frame">
-            <MonthLineChart series={visionCompare} />
-          </div>
-        </ChartCard>
-
-        <ChartCard
-          title="Contrast improvement"
-          subtitle="Contrast sensitivity 1–10 from the screening visit"
-          empty={contrastCompare.length === 0}
-          emptyText="Add contrast R/L on visits to see this chart."
-        >
-          <div className="chart-frame">
-            <MonthLineChart series={contrastCompare} />
-          </div>
-        </ChartCard>
-
-        <ChartCard
-          title="Color vision"
-          subtitle="Color vision score from visits (1–30)"
-          empty={colorPoints.length === 0}
-          emptyText="Set color vision on visits to see this chart."
-        >
-          <div className="chart-frame">
-            <MetricLineChart data={colorPoints} />
-          </div>
-        </ChartCard>
-
-        <ChartCard
-          title="Near vision"
-          subtitle="Near acuity scored so higher is better (N1 best)"
-          empty={nearCompare.length === 0}
-          emptyText="Add near vision (R/L) on visits to see this chart."
-        >
-          <div className="chart-frame">
-            <MonthLineChart series={nearCompare} />
-          </div>
-        </ChartCard>
-
-        <ChartCard
           title="Eye pressure"
-          subtitle="IOP mmHg — Right vs Left"
-          empty={pressureCompare.length === 0}
-          emptyText="Enter IOP for both eyes on visits to see this chart."
+          subtitle="IOP mmHg from disease assessments — Right vs Left when recorded"
+          empty={pressureCompare.length === 0 && (data.series.iop || []).length === 0}
+          emptyText="Enter IOP on a disease assessment to see this chart."
         >
           <div className="chart-frame">
-            <MonthLineChart series={pressureCompare} />
+            {pressureCompare.length > 0 ? (
+              <MonthLineChart series={pressureCompare} />
+            ) : (
+              <MetricLineChart
+                data={(data.series.iop || []).map((p) => ({
+                  date: p.date,
+                  value: p.value,
+                  label: p.eye || p.source,
+                }))}
+                unit="mmHg"
+              />
+            )}
           </div>
         </ChartCard>
 
@@ -220,13 +175,35 @@ export function PatientChartsPanel({ patientId }: Props) {
             <MonthLineChart series={scoreCompare} />
           </div>
         </ChartCard>
+
+        <ChartCard
+          title="Contrast (follow-up)"
+          subtitle="From assessment follow-up rows when recorded"
+          empty={contrastCompare.length === 0}
+          emptyText="Add contrast values on assessment follow-ups to see this chart."
+        >
+          <div className="chart-frame">
+            <MonthLineChart series={contrastCompare} />
+          </div>
+        </ChartCard>
+
+        <ChartCard
+          title="Color vision (follow-up)"
+          subtitle="Numeric color vision from assessment follow-ups"
+          empty={colorPoints.length === 0}
+          emptyText="Add color vision numbers on assessment follow-ups to see this chart."
+        >
+          <div className="chart-frame">
+            <MetricLineChart data={colorPoints} />
+          </div>
+        </ChartCard>
       </div>
 
       <ChartCard
-        title="Other clinical metrics"
-        subtitle="CMT, assessment IOP, CSGS, HbA1c, SRF, and visit-derived series"
+        title="Clinical metrics from assessments"
+        subtitle="CMT, IOP, CSGS, HbA1c, SRF, and other numeric fields from New assessment"
         empty={chartPoints.length < 1}
-        emptyText="No numeric trend data yet for this patient."
+        emptyText="No numeric trend data yet — save disease assessments with measurable values."
       >
         {metricOptions.length > 0 && (
           <div className="row" style={{ marginBottom: '0.75rem' }}>
@@ -255,7 +232,7 @@ export function PatientChartsPanel({ patientId }: Props) {
 
       <ChartCard
         title="Clinic activity for this patient"
-        subtitle="Visits, disease assessments, and progress notes by month"
+        subtitle="Attendance ticks, disease assessments, and progress notes by month"
         empty={data.activity.length === 0}
       >
         <div className="chart-frame">

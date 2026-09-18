@@ -261,17 +261,17 @@ export function extractVisitScreeningMetrics(visits) {
   };
 }
 
-export function buildMonthlyActivity({ visits, assessments, progress }) {
+export function buildMonthlyActivity({ attendance = [], assessments, progress }) {
   const map = new Map();
 
   function bump(dateValue, field) {
     const m = monthKey(dateValue);
     if (!m) return;
-    if (!map.has(m)) map.set(m, { month: m, visits: 0, assessments: 0, progress: 0 });
+    if (!map.has(m)) map.set(m, { month: m, attendance: 0, assessments: 0, progress: 0 });
     map.get(m)[field] += 1;
   }
 
-  for (const v of visits) bump(v.visit_date || v.visitDate, 'visits');
+  for (const row of attendance) bump(row.visit_date || row.visitDate, 'attendance');
   for (const a of assessments) bump(a.assessment_date || a.assessmentDate, 'assessments');
   for (const p of progress) bump(p.log_date || p.logDate, 'progress');
 

@@ -157,7 +157,7 @@ export function MetricLineChart({
 export function ActivityBarChart({
   data,
 }: {
-  data: Array<{ month: string; visits: number; assessments: number; progress: number }>;
+  data: Array<{ month: string; attendance: number; assessments: number; progress: number }>;
 }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -167,7 +167,7 @@ export function ActivityBarChart({
         <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} />
         <Tooltip />
         <Legend />
-        <Bar dataKey="visits" name="Visits" stackId="a" fill={COLORS[0]} />
+        <Bar dataKey="attendance" name="Attendance" stackId="a" fill={COLORS[0]} />
         <Bar dataKey="assessments" name="Assessments" stackId="a" fill={COLORS[2]} />
         <Bar dataKey="progress" name="Progress" stackId="a" fill={COLORS[3]} />
       </BarChart>

@@ -177,7 +177,7 @@ export type ChartPoint = {
 export type PatientCharts = {
   metrics: Array<{ key: string; label: string; aliases: string[] }>;
   series: Record<string, ChartPoint[]>;
-  activity: Array<{ month: string; visits: number; assessments: number; progress: number }>;
+  activity: Array<{ month: string; attendance: number; assessments: number; progress: number }>;
   progress: Array<{
     id: string;
     date: string;
@@ -186,26 +186,25 @@ export type PatientCharts = {
     rightScore: number | null;
     leftScore: number | null;
   }>;
-  counts: { visits: number; assessments: number; progress: number };
+  counts: { attendance: number; assessments: number; progress: number };
 };
 
 export type ClinicStats = {
   totals: {
     patients: number;
-    visits: number;
+    attendanceDays: number;
     progressLogs: number;
     assessments: number;
-    visitsThisMonth: number;
+    attendanceThisMonth: number;
     assessmentsThisMonth: number;
     patientsWithConditions: number;
   };
   gender: Array<{ name: string; value: number }>;
   ageBands: Array<{ name: string; value: number }>;
   conditions: Array<{ name: string; value: number }>;
-  diagnoses: Array<{ name: string; value: number }>;
   assessmentsByType: Array<{ name: string; value: number }>;
   registrationsByMonth: Array<{ month: string; value: number }>;
-  visitsByMonth: Array<{ month: string; value: number }>;
+  attendanceByMonth: Array<{ month: string; value: number }>;
   assessmentsByMonth: Array<{ month: string; value: number }>;
 };
 
@@ -312,17 +311,18 @@ export const api = {
     }>(`/api/patients/${patientId}/attendance?onDate=${encodeURIComponent(date)}`);
   },
 
-  recentVisits: () =>
+  recentAssessments: () =>
     request<
       Array<{
-        visit_id: string;
-        visit_date: string;
-        diagnosis: string | null;
+        assessment_id: string;
+        assessment_date: string;
+        form_type: string;
+        eye: string | null;
         patient_id: string;
         patient_name: string;
         opd_ad_no: string | null;
       }>
-    >('/api/patients/recent-visits'),
+    >('/api/patients/recent-assessments'),
 
   getStats: () => request<ClinicStats>('/api/stats'),
 

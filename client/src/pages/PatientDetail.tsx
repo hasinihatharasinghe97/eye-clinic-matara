@@ -6,14 +6,13 @@ import {
   type DiseaseAssessment,
   type Patient,
   type ProgressLog,
-  type Visit,
 } from '../api';
 import { diseaseFormTitle } from '../diseaseForms/catalog';
 import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
 import { PatientChartsPanel } from './PatientCharts';
 import { CameraCapture } from '../components/CameraCapture';
 import { SendMedicineWhatsApp } from '../components/SendMedicineWhatsApp';
-import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { LoadingBlock } from '../components/PageNav';
 import { VisitTodayTick } from '../components/VisitTodayTick';
 
 function formatWhen(value: string) {
@@ -25,17 +24,6 @@ function formatWhen(value: string) {
   return d.toLocaleString();
 }
 
-function formatIop(iop: Visit['iop']): string {
-  if (!iop) return '—';
-  if (typeof iop === 'object') {
-    const r = iop.r?.trim() || '—';
-    const l = iop.l?.trim() || '—';
-    if (r === '—' && l === '—') return '—';
-    return `R ${r} / L ${l}`;
-  }
-  return String(iop);
-}
-
 type Props = {
   patientId: string;
   tab: string;
@@ -45,7 +33,6 @@ type Props = {
 export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const { forms: DISEASE_FORMS } = useDiseaseForms();
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [visits, setVisits] = useState<Visit[]>([]);
   const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [files, setFiles] = useState<Attachment[]>([]);
   const [assessments, setAssessments] = useState<DiseaseAssessment[]>([]);
@@ -67,16 +54,14 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [p, v, l, a, d] = await Promise.all([
+      const [p, l, a, d] = await Promise.all([
         api.getPatient(patientId, today),
-        api.listVisits(patientId),
         api.listProgress(patientId),
         api.listAttachments(patientId),
         api.listDiseaseAssessments(patientId),
       ]);
       setPatient(p);
       setVisitedToday(Boolean(p.visitedToday));
-      setVisits(v);
       setLogs(l);
       setFiles(a);
       setAssessments(d);
@@ -178,13 +163,11 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       ? 'progress'
       : tab === 'images'
         ? 'images'
-        : tab === 'diseases'
-          ? 'diseases'
-          : tab === 'charts'
-            ? 'charts'
-            : tab === 'whatsapp'
-              ? 'whatsapp'
-              : 'visits';
+        : tab === 'charts'
+          ? 'charts'
+          : tab === 'whatsapp'
+            ? 'whatsapp'
+            : 'diseases';
 
   const filteredAssessments = filterFormType
     ? assessments.filter((a) => a.formType === filterFormType)
@@ -254,17 +237,10 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       <div className="tabs">
         <button
           type="button"
-          className={active === 'visits' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/visits`)}
-        >
-          Visits
-        </button>
-        <button
-          type="button"
           className={active === 'diseases' ? 'active' : ''}
           onClick={() => onNavigate(`/patients/${patientId}/diseases`)}
         >
-          Disease forms
+          Assessments
         </button>
         <button
           type="button"
@@ -296,86 +272,14 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
         </button>
       </div>
 
-      {active === 'visits' && (
-        <div className="card">
-          <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>Eye screening forms (optional)</h3>
-              <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
-                Day-to-day attendance uses the <strong>Visited today</strong> tick above. Add a
-                screening form only when needed. Disease assessments stay under Diseases.
-              </p>
-            </div>
-            <button
-              className="btn secondary"
-              type="button"
-              onClick={() => onNavigate(`/patients/${patientId}/visits/new`)}
-            >
-              Add screening form
-            </button>
-          </div>
-          {visits.length === 0 ? (
-            <EmptyState
-              title="No screening forms yet"
-              hint="Mark Visited today for normal clinic days. Add a screening form only when you need full eye findings."
-              actionLabel="Add screening form"
-              onAction={() => onNavigate(`/patients/${patientId}/visits/new`)}
-            />
-          ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Diagnosis</th>
-                    <th>IOP</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visits.map((v) => (
-                    <tr key={v.id}>
-                      <td>{v.visitDate}</td>
-                      <td>{v.diagnosis || '—'}</td>
-                      <td>{formatIop(v.iop)}</td>
-                      <td className="row">
-                        <button
-                          className="btn secondary"
-                          type="button"
-                          onClick={() =>
-                            onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)
-                          }
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn danger"
-                          type="button"
-                          onClick={async () => {
-                            if (!confirm('Delete this visit?')) return;
-                            await api.deleteVisit(patientId, v.id);
-                            await load();
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
       {active === 'diseases' && (
         <>
           <div className="card">
-            <h3>Start disease monitoring form</h3>
+            <h3>New assessment</h3>
             <p className="muted">
               Forms match the clinic PDF proformas (cataract, DR, ARMD, CME, and others). Fill a new
-              assessment each review visit to track improvement.
+              assessment each review visit to track improvement. Use Visited today for ordinary
+              attendance days.
             </p>
             {patientConditions.length === 0 && (
               <p className="warn-banner">

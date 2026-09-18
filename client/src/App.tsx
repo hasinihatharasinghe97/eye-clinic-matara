@@ -9,7 +9,6 @@ import {
 } from './api';
 import { PatientForm } from './pages/PatientForm';
 import { PatientDetail } from './pages/PatientDetail';
-import { VisitForm } from './pages/VisitForm';
 import { BackupPage } from './pages/BackupPage';
 import { DiseaseFormPage } from './diseaseForms/DiseaseFormPage';
 import { StatsPage } from './pages/StatsPage';
@@ -23,8 +22,6 @@ type Route =
   | { name: 'new-patient' }
   | { name: 'edit-patient'; id: string }
   | { name: 'patient'; id: string; tab?: string }
-  | { name: 'new-visit'; patientId: string }
-  | { name: 'edit-visit'; patientId: string; visitId: string }
   | { name: 'new-disease'; patientId: string; formType: string }
   | { name: 'edit-disease'; patientId: string; formType: string; assessmentId: string }
   | { name: 'backup' }
@@ -32,8 +29,8 @@ type Route =
   | { name: 'forms' };
 
 const TAB_LABELS: Record<string, string> = {
-  visits: 'Visits',
-  diseases: 'Disease forms',
+  diseases: 'Assessments',
+  visits: 'Assessments',
   charts: 'Charts',
   progress: 'Progress',
   images: 'Images',
@@ -47,11 +44,9 @@ function parseRoute(): Route {
   if (parts[0] === 'patients' && parts[1] && parts[2] === 'edit') {
     return { name: 'edit-patient', id: parts[1] };
   }
-  if (parts[0] === 'patients' && parts[1] && parts[2] === 'visits' && parts[3] === 'new') {
-    return { name: 'new-visit', patientId: parts[1] };
-  }
-  if (parts[0] === 'patients' && parts[1] && parts[2] === 'visits' && parts[3] && parts[4] === 'edit') {
-    return { name: 'edit-visit', patientId: parts[1], visitId: parts[3] };
+  if (parts[0] === 'patients' && parts[1] && parts[2] === 'visits') {
+    // Old screening-form URLs redirect to assessments
+    return { name: 'patient', id: parts[1], tab: 'diseases' };
   }
   if (
     parts[0] === 'patients' &&
@@ -96,12 +91,7 @@ function navigate(to: string) {
 
 function routePatientId(route: Route): string | null {
   if (route.name === 'patient' || route.name === 'edit-patient') return route.id;
-  if (
-    route.name === 'new-visit' ||
-    route.name === 'edit-visit' ||
-    route.name === 'new-disease' ||
-    route.name === 'edit-disease'
-  ) {
+  if (route.name === 'new-disease' || route.name === 'edit-disease') {
     return route.patientId;
   }
   return null;
@@ -129,43 +119,23 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
         backTo: `/patients/${route.id}`,
       };
     case 'patient': {
-      const tab = route.tab || 'visits';
-      const tabLabel = TAB_LABELS[tab] || 'Visits';
+      const tab = route.tab === 'visits' ? 'diseases' : route.tab || 'diseases';
+      const tabLabel = TAB_LABELS[tab] || 'Assessments';
       return {
         crumbs: [
           patients,
-          { label: name, href: `/patients/${route.id}` },
+          { label: name, href: `/patients/${route.id}/diseases` },
           { label: tabLabel },
         ],
         backTo: '/',
       };
     }
-    case 'new-visit':
-      return {
-        crumbs: [
-          patients,
-          { label: name, href: `/patients/${route.patientId}` },
-          { label: 'Visits', href: `/patients/${route.patientId}/visits` },
-          { label: 'New visit' },
-        ],
-        backTo: `/patients/${route.patientId}/visits`,
-      };
-    case 'edit-visit':
-      return {
-        crumbs: [
-          patients,
-          { label: name, href: `/patients/${route.patientId}` },
-          { label: 'Visits', href: `/patients/${route.patientId}/visits` },
-          { label: 'Edit visit' },
-        ],
-        backTo: `/patients/${route.patientId}/visits`,
-      };
     case 'new-disease':
       return {
         crumbs: [
           patients,
-          { label: name, href: `/patients/${route.patientId}` },
-          { label: 'Disease forms', href: `/patients/${route.patientId}/diseases` },
+          { label: name, href: `/patients/${route.patientId}/diseases` },
+          { label: 'Assessments', href: `/patients/${route.patientId}/diseases` },
           { label: diseaseFormTitle(route.formType) },
           { label: 'New' },
         ],
@@ -175,8 +145,8 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
       return {
         crumbs: [
           patients,
-          { label: name, href: `/patients/${route.patientId}` },
-          { label: 'Disease forms', href: `/patients/${route.patientId}/diseases` },
+          { label: name, href: `/patients/${route.patientId}/diseases` },
+          { label: 'Assessments', href: `/patients/${route.patientId}/diseases` },
           { label: diseaseFormTitle(route.formType) },
           { label: 'Edit' },
         ],
@@ -243,9 +213,10 @@ function Dashboard() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [recent, setRecent] = useState<
     Array<{
-      visit_id: string;
-      visit_date: string;
-      diagnosis: string | null;
+      assessment_id: string;
+      assessment_date: string;
+      form_type: string;
+      eye: string | null;
       patient_id: string;
       patient_name: string;
       opd_ad_no: string | null;
@@ -262,14 +233,14 @@ function Dashboard() {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const [list, visits, s] = await Promise.all([
+        const [list, assessments, s] = await Promise.all([
           api.listPatients(q, today),
-          api.recentVisits(),
+          api.recentAssessments(),
           api.getSettings(),
         ]);
         if (!cancelled) {
           setPatients(list);
-          setRecent(visits);
+          setRecent(assessments);
           setSettings(s);
           setError('');
         }
@@ -380,7 +351,7 @@ function Dashboard() {
             hint={
               q
                 ? 'Try another name, OPD number, phone, or ID.'
-                : 'Register the first patient to start recording visits and disease forms.'
+                : 'Register the first patient to start recording disease assessments.'
             }
             actionLabel={q ? 'Clear search' : 'New patient'}
             onAction={() => (q ? setQ('') : navigate('/patients/new'))}
@@ -401,7 +372,7 @@ function Dashboard() {
               </thead>
               <tbody>
                 {patients.map((p) => (
-                  <tr key={p.id} className="clickable-row" onClick={() => navigate(`/patients/${p.id}`)}>
+                  <tr key={p.id} className="clickable-row" onClick={() => navigate(`/patients/${p.id}/diseases`)}>
                     <td onClick={(e) => e.stopPropagation()}>
                       <VisitTodayTick
                         checked={Boolean(p.visitedToday)}
@@ -412,11 +383,11 @@ function Dashboard() {
                     </td>
                     <td>
                       <a
-                        href={`#/patients/${p.id}`}
+                        href={`#/patients/${p.id}/diseases`}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          navigate(`/patients/${p.id}`);
+                          navigate(`/patients/${p.id}/diseases`);
                         }}
                       >
                         {p.name}
@@ -433,7 +404,7 @@ function Dashboard() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/patients/${p.id}`);
+                          navigate(`/patients/${p.id}/diseases`);
                         }}
                       >
                         Open
@@ -457,7 +428,7 @@ function Dashboard() {
                   <button
                     type="button"
                     className="mobile-list-item"
-                    onClick={() => navigate(`/patients/${p.id}`)}
+                    onClick={() => navigate(`/patients/${p.id}/diseases`)}
                   >
                     <span className="mobile-list-title">{p.name}</span>
                     <span className="mobile-list-meta">
@@ -474,13 +445,13 @@ function Dashboard() {
       </div>
 
       <div className="card">
-        <h3>Recent visits</h3>
+        <h3>Recent assessments</h3>
         {loading ? (
-          <LoadingBlock label="Loading recent visits…" />
+          <LoadingBlock label="Loading recent assessments…" />
         ) : recent.length === 0 ? (
           <EmptyState
-            title="No visits recorded yet"
-            hint="Open a patient and add an eye screening visit."
+            title="No assessments recorded yet"
+            hint="Open a patient and add a New assessment."
           />
         ) : (
           <>
@@ -491,49 +462,49 @@ function Dashboard() {
                   <th>Date</th>
                   <th>Patient</th>
                   <th>OPD</th>
-                  <th>Diagnosis</th>
+                  <th>Form</th>
                 </tr>
               </thead>
               <tbody>
-                {recent.map((v) => (
+                {recent.map((a) => (
                   <tr
-                    key={v.visit_id}
+                    key={a.assessment_id}
                     className="clickable-row"
-                    onClick={() => navigate(`/patients/${v.patient_id}/visits`)}
+                    onClick={() => navigate(`/patients/${a.patient_id}/diseases`)}
                   >
-                    <td>{v.visit_date}</td>
+                    <td>{a.assessment_date}</td>
                     <td>
                       <a
-                        href={`#/patients/${v.patient_id}`}
+                        href={`#/patients/${a.patient_id}/diseases`}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          navigate(`/patients/${v.patient_id}`);
+                          navigate(`/patients/${a.patient_id}/diseases`);
                         }}
                       >
-                        {v.patient_name}
+                        {a.patient_name}
                       </a>
                     </td>
-                    <td>{v.opd_ad_no || '—'}</td>
-                    <td>{v.diagnosis || '—'}</td>
+                    <td>{a.opd_ad_no || '—'}</td>
+                    <td>{diseaseFormTitle(a.form_type)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <ul className="mobile-list mobile-only">
-            {recent.map((v) => (
-              <li key={v.visit_id}>
+            {recent.map((a) => (
+              <li key={a.assessment_id}>
                 <button
                   type="button"
                   className="mobile-list-item"
-                  onClick={() => navigate(`/patients/${v.patient_id}/visits`)}
+                  onClick={() => navigate(`/patients/${a.patient_id}/diseases`)}
                 >
-                  <span className="mobile-list-title">{v.patient_name}</span>
+                  <span className="mobile-list-title">{a.patient_name}</span>
                   <span className="mobile-list-meta">
-                    {v.visit_date} · OPD {v.opd_ad_no || '—'}
+                    {a.assessment_date} · OPD {a.opd_ad_no || '—'}
                   </span>
-                  <span className="mobile-list-meta">{v.diagnosis || 'No diagnosis noted'}</span>
+                  <span className="mobile-list-meta">{diseaseFormTitle(a.form_type)}</span>
                 </button>
               </li>
             ))}
@@ -681,39 +652,22 @@ export default function App() {
       {route.name === 'stats' && <StatsPage />}
       {route.name === 'new-patient' && (
         <PatientForm
-          onDone={(id) => navigate(`/patients/${id}`)}
+          onDone={(id) => navigate(`/patients/${id}/diseases`)}
           onCancel={() => navigate('/')}
         />
       )}
       {route.name === 'edit-patient' && (
         <PatientForm
           patientId={route.id}
-          onDone={(id) => navigate(`/patients/${id}`)}
-          onCancel={() => navigate(`/patients/${route.id}`)}
+          onDone={(id) => navigate(`/patients/${id}/diseases`)}
+          onCancel={() => navigate(`/patients/${route.id}/diseases`)}
         />
       )}
       {route.name === 'patient' && (
         <PatientDetail
           patientId={route.id}
-          tab={route.tab || 'visits'}
+          tab={route.tab === 'visits' ? 'diseases' : route.tab || 'diseases'}
           onNavigate={navigate}
-        />
-      )}
-      {route.name === 'new-visit' && (
-        <VisitForm
-          patientId={route.patientId}
-          patientName={patientName}
-          onDone={() => navigate(`/patients/${route.patientId}/visits`)}
-          onCancel={() => navigate(`/patients/${route.patientId}/visits`)}
-        />
-      )}
-      {route.name === 'edit-visit' && (
-        <VisitForm
-          patientId={route.patientId}
-          visitId={route.visitId}
-          patientName={patientName}
-          onDone={() => navigate(`/patients/${route.patientId}/visits`)}
-          onCancel={() => navigate(`/patients/${route.patientId}/visits`)}
         />
       )}
       {route.name === 'new-disease' && (

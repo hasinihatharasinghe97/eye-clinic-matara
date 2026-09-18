@@ -35,16 +35,16 @@ export function StatsPage() {
     if (!stats) return [];
     const months = new Set<string>();
     for (const r of stats.registrationsByMonth) months.add(r.month);
-    for (const r of stats.visitsByMonth) months.add(r.month);
+    for (const r of stats.attendanceByMonth) months.add(r.month);
     for (const r of stats.assessmentsByMonth) months.add(r.month);
     const sorted = [...months].sort();
     const reg = Object.fromEntries(stats.registrationsByMonth.map((x) => [x.month, x.value]));
-    const vis = Object.fromEntries(stats.visitsByMonth.map((x) => [x.month, x.value]));
+    const att = Object.fromEntries(stats.attendanceByMonth.map((x) => [x.month, x.value]));
     const ass = Object.fromEntries(stats.assessmentsByMonth.map((x) => [x.month, x.value]));
     return sorted.map((month) => ({
       month,
       patients: reg[month] || 0,
-      visits: vis[month] || 0,
+      attendance: att[month] || 0,
       assessments: ass[month] || 0,
     }));
   }, [stats]);
@@ -71,7 +71,11 @@ export function StatsPage() {
       <StatKpis
         items={[
           { label: 'Patients', value: stats.totals.patients },
-          { label: 'Visits', value: stats.totals.visits, hint: `${stats.totals.visitsThisMonth} this month` },
+          {
+            label: 'Attendance days',
+            value: stats.totals.attendanceDays,
+            hint: `${stats.totals.attendanceThisMonth} this month`,
+          },
           {
             label: 'Disease assessments',
             value: stats.totals.assessments,
@@ -129,27 +133,11 @@ export function StatsPage() {
 
         <ChartCard
           title="Activity over time"
-          subtitle="New patients, visits, and assessments by month"
+          subtitle="New patients, attendance ticks, and assessments by month"
           empty={trend.length === 0}
         >
           <div className="chart-frame">
             <MonthLineChart series={trend} />
-          </div>
-        </ChartCard>
-
-        <ChartCard
-          title="Top visit diagnoses"
-          empty={stats.diagnoses.length === 0}
-          emptyText="Add diagnosis text on screening visits to populate this list."
-        >
-          <div className="chart-frame">
-            <SimpleBarChart
-              data={stats.diagnoses.map((d) => ({
-                name: d.name.length > 18 ? `${d.name.slice(0, 18)}…` : d.name,
-                value: d.value,
-              }))}
-              color="#9b2c2c"
-            />
           </div>
         </ChartCard>
       </div>

@@ -108,21 +108,22 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/recent-visits', async (_req, res) => {
+router.get('/recent-assessments', async (_req, res) => {
   try {
     const rows = await db
       .prepare(
-        `SELECT v.id AS visit_id, v.visit_date, v.diagnosis, p.id AS patient_id, p.name AS patient_name, p.opd_ad_no
-         FROM visits v
-         JOIN patients p ON p.id = v.patient_id
-         ORDER BY v.visit_date DESC, v.created_at DESC
+        `SELECT a.id AS assessment_id, a.assessment_date, a.form_type, a.eye,
+                p.id AS patient_id, p.name AS patient_name, p.opd_ad_no
+         FROM disease_assessments a
+         JOIN patients p ON p.id = a.patient_id
+         ORDER BY a.assessment_date DESC, a.created_at DESC
          LIMIT 15`
       )
       .all();
     res.json(rows);
   } catch (err) {
-    console.error('[patients] recent-visits failed:', err);
-    res.status(500).json({ error: err.message || 'Could not load recent visits' });
+    console.error('[patients] recent-assessments failed:', err);
+    res.status(500).json({ error: err.message || 'Could not load recent assessments' });
   }
 });
 

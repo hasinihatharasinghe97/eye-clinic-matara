@@ -803,12 +803,11 @@ try {
     p.age,
     p.gender,
     (SELECT COUNT(*) FROM clinic_attendance c WHERE c.patient_id = p.id) AS attendance_days,
-    (SELECT COUNT(*) FROM visits v WHERE v.patient_id = p.id) AS screening_forms,
     (SELECT COUNT(*) FROM disease_assessments d WHERE d.patient_id = p.id) AS disease_assessments,
     (SELECT MAX(c.visit_date) FROM clinic_attendance c WHERE c.patient_id = p.id) AS last_attendance_date
   FROM patients p;
 `);
-  console.log('[db] Query views ready (v_patients, v_attendance, v_visits, …)');
+  console.log('[db] Query views ready (v_patients, v_attendance, v_disease_assessments, …)');
 } catch (err) {
   console.warn('[db] Could not create reporting views:', err?.message || err);
 }

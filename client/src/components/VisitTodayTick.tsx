@@ -5,7 +5,7 @@ type Props = {
   onChange: (next: boolean) => void | Promise<void>;
 };
 
-/** Tick to mark that the patient attended the clinic today (not a full screening form). */
+/** Tick to mark that the patient attended the clinic today. */
 export function VisitTodayTick({ checked, disabled, label = 'Visited today', onChange }: Props) {
   return (
     <label
