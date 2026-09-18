@@ -208,7 +208,7 @@ textarea {
 }
 
 .mobile-only {
-  display: none;
+  display: none !important;
 }
 
 .mobile-list {
@@ -327,11 +327,11 @@ textarea {
   }
 
   .mobile-only {
-    display: block;
+    display: block !important;
   }
 
   .mobile-list.mobile-only {
-    display: flex;
+    display: flex !important;
   }
 
   .page-toolbar {

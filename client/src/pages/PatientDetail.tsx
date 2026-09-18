@@ -52,6 +52,11 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const [togglingVisit, setTogglingVisit] = useState(false);
   const today = localClinicDate();
 
+  useEffect(() => {
+    setNewFormType('');
+    setFilterFormType('');
+  }, [patientId]);
+
   const load = useCallback(async () => {
     try {
       const [p, l, a, d] = await Promise.all([
@@ -94,10 +99,15 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
     if (patientConditions.length === 0) return DISEASE_FORMS;
     const selected = DISEASE_FORMS.filter((f) => patientConditions.includes(f.id));
     return selected.length ? selected : DISEASE_FORMS;
-  }, [patientConditions]);
+  }, [patientConditions, DISEASE_FORMS]);
 
   useEffect(() => {
-    if (!newFormType && availableForms[0]) {
+    if (availableForms.length === 0) {
+      setNewFormType('');
+      return;
+    }
+    const stillValid = availableForms.some((f) => f.id === newFormType);
+    if (!stillValid) {
       setNewFormType(availableForms[0].id);
     }
   }, [availableForms, newFormType]);
