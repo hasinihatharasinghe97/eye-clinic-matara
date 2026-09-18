@@ -24,6 +24,13 @@ const progress_logs = await db.prepare('SELECT * FROM progress_logs').all();
 const attachments = await db.prepare('SELECT * FROM attachments').all();
 const disease_assessments = await db.prepare('SELECT * FROM disease_assessments').all();
 
+let clinic_attendance = [];
+try {
+  clinic_attendance = await db.prepare('SELECT * FROM clinic_attendance').all();
+} catch {
+  clinic_attendance = [];
+}
+
 let custom_disease_forms = [];
 try {
   custom_disease_forms = await db.prepare('SELECT * FROM custom_disease_forms').all();
@@ -35,12 +42,13 @@ const settings = await getSettings();
 
 const snap = {
   exportedAt: new Date().toISOString(),
-  version: 2,
+  version: 3,
   patients,
   visits,
   progress_logs,
   attachments,
   disease_assessments,
+  clinic_attendance,
   custom_disease_forms,
   settings: {
     backupFolder: settings.backupFolder,
@@ -54,7 +62,7 @@ fs.writeFileSync(outPath, JSON.stringify(snap, null, 2), 'utf8');
 
 console.log(`Wrote ${outPath}`);
 console.log(
-  `${patients.length} patients, ${visits.length} visits, ${progress_logs.length} progress, ${attachments.length} attachments, ${disease_assessments.length} assessments, ${custom_disease_forms.length} custom forms`
+  `${patients.length} patients, ${visits.length} visits, ${progress_logs.length} progress, ${attachments.length} attachments, ${disease_assessments.length} assessments, ${clinic_attendance.length} attendance, ${custom_disease_forms.length} custom forms`
 );
 console.log('Next: import into HeatWave with STORE_FILES_IN_DB=1 — see docs/HOSTING.md');
 process.exit(0);

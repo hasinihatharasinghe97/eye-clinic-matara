@@ -713,6 +713,89 @@ textarea {
   line-height: 1.35;
 }
 
+.visit-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.88rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.visit-tick input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.visit-tick-box {
+  width: 1.45rem;
+  height: 1.45rem;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.visit-tick.is-checked {
+  color: var(--accent);
+}
+
+.visit-tick.is-checked .visit-tick-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.visit-tick.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.visit-tick-label {
+  white-space: nowrap;
+}
+
+.mobile-list-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.mobile-list-item-row .mobile-list-item {
+  flex: 1;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.mobile-list-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.75rem 0.85rem;
+}
+
+.patient-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .stat-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

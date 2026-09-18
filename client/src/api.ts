@@ -13,6 +13,14 @@ export function isLoggedIn(): boolean {
   return getToken() === 'local-clinic';
 }
 
+/** Local calendar date YYYY-MM-DD (clinic timezone on the device). */
+export function localClinicDate(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const timeoutMs = 45_000;
   const controller = new AbortController();
@@ -48,6 +56,8 @@ export type Patient = {
   conditions?: string[];
   /** Medicine PDF numbers (1–200) already sent to this patient */
   medicinesSent?: number[];
+  /** Marked as attended the clinic on today's (or requested) date */
+  visitedToday?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -276,8 +286,31 @@ export const api = {
 
   backupDownloadUrl: (id: string) => `/api/system/backups/${encodeURIComponent(id)}/download`,
 
-  listPatients: (q = '') =>
-    request<Patient[]>(`/api/patients${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  listPatients: (q = '', onDate?: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    params.set('onDate', onDate || localClinicDate());
+    return request<Patient[]>(`/api/patients?${params}`);
+  },
+
+  setAttendance: (patientId: string, visited: boolean, onDate?: string) =>
+    request<{ ok: boolean; patientId: string; date: string; visited: boolean }>(
+      `/api/patients/${patientId}/attendance`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visited, date: onDate || localClinicDate() }),
+      }
+    ),
+
+  getAttendance: (patientId: string, onDate?: string) => {
+    const date = onDate || localClinicDate();
+    return request<{
+      onDate: string;
+      visitedToday: boolean;
+      dates: Array<{ date: string; createdAt: string }>;
+    }>(`/api/patients/${patientId}/attendance?onDate=${encodeURIComponent(date)}`);
+  },
 
   recentVisits: () =>
     request<
@@ -296,7 +329,10 @@ export const api = {
   getPatientCharts: (patientId: string) =>
     request<PatientCharts>(`/api/patients/${patientId}/charts`),
 
-  getPatient: (id: string) => request<Patient>(`/api/patients/${id}`),
+  getPatient: (id: string, onDate?: string) => {
+    const date = onDate || localClinicDate();
+    return request<Patient>(`/api/patients/${id}?onDate=${encodeURIComponent(date)}`);
+  },
 
   createPatient: (body: Partial<Patient> & { name: string }) =>
     request<Patient>('/api/patients', {

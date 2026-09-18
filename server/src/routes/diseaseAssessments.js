@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import db from '../db.js';
+import db, { getPatientOpd } from '../db.js';
 
 const router = Router({ mergeParams: true });
 
@@ -113,14 +113,16 @@ router.post('/', async (req, res) => {
 
   const ts = now();
   const assessmentDate = normalizeAssessmentDate(body.assessmentDate, ts);
+  const opdAdNo = await getPatientOpd(req.params.patientId);
   const result = await db
     .prepare(
       `INSERT INTO disease_assessments (
-        patient_id, form_type, assessment_date, eye, \`data\`, notes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        patient_id, opd_ad_no, form_type, assessment_date, eye, \`data\`, notes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       req.params.patientId,
+      opdAdNo,
       formType,
       assessmentDate,
       body.eye || null,

@@ -1,130 +1,81 @@
--- MySQL schema for Nethraloka Ayurvedic Eye Clinic
--- Tables are also created automatically by server/src/db.js on startup.
+-- Nethraloka Ayurvedic Eye Clinic — MySQL schema + query helpers
+-- Tables are also created/updated automatically by server/src/db.js on startup.
+--
+-- Design:
+--   - patients.id          = internal key used by the app (stable FK)
+--   - patients.opd_ad_no   = clinic OPD number (human key for SQL reports)
+--   - Related tables keep patient_id AND a copied opd_ad_no for easy joins/filters
+--
+-- Prefer the v_* views below when exploring data in DBeaver / MySQL Workbench.
 
 CREATE DATABASE IF NOT EXISTS eye_clinic
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE eye_clinic;
 
-CREATE TABLE IF NOT EXISTS patients (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  age INT NULL,
-  gender VARCHAR(32) NULL,
-  registration_date VARCHAR(32) NULL,
-  opd_ad_no VARCHAR(128) NULL,
-  occupation VARCHAR(255) NULL,
-  id_number VARCHAR(128) NULL,
-  address TEXT NULL,
-  phone VARCHAR(64) NULL,
-  conditions TEXT NULL,
-  medicines_sent TEXT NULL,
-  created_at VARCHAR(64) NOT NULL,
-  updated_at VARCHAR(64) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- ---------------------------------------------------------------------------
+-- Core tables (simplified reference — runtime may add columns via migration)
+-- ---------------------------------------------------------------------------
 
-CREATE INDEX idx_patients_name ON patients(name);
-CREATE INDEX idx_patients_opd ON patients(opd_ad_no);
-CREATE INDEX idx_patients_phone ON patients(phone);
-CREATE INDEX idx_patients_id_number ON patients(id_number);
+-- patients: one row per person (lookup by opd_ad_no)
+-- clinic_attendance: simple “visited clinic that day” ticks (not full screening forms)
+-- visits: optional detailed eye screening forms
+-- disease_assessments: disease forms (separate from day attendance)
+-- progress_logs, attachments: linked to the same patient / OPD
 
-CREATE TABLE IF NOT EXISTS visits (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  patient_id INT NOT NULL,
-  visit_date VARCHAR(32) NOT NULL,
-  co_complaints TEXT NULL,
-  oc_other TEXT NULL,
-  family_history TEXT NULL,
-  exam_external TEXT NULL,
-  vision TEXT NULL,
-  inspection TEXT NULL,
-  slit_lamp TEXT NULL,
-  cataract TEXT NULL,
-  ix_history TEXT NULL,
-  diagnosis TEXT NULL,
-  iop TEXT NULL,
-  color_vision TEXT NULL,
-  visual_field TEXT NULL,
-  notes TEXT NULL,
-  created_at VARCHAR(64) NOT NULL,
-  updated_at VARCHAR(64) NOT NULL,
-  CONSTRAINT fk_visits_patient
-    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- ---------------------------------------------------------------------------
+-- Handy views (created on app startup too)
+-- ---------------------------------------------------------------------------
+-- v_patients
+-- v_attendance
+-- v_visits
+-- v_disease_assessments
+-- v_progress_logs
+-- v_attachments
+-- v_patient_summary
 
-CREATE INDEX idx_visits_patient ON visits(patient_id);
-CREATE INDEX idx_visits_date ON visits(visit_date);
+-- ---------------------------------------------------------------------------
+-- Example queries (use OPD number)
+-- ---------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS progress_logs (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  patient_id INT NOT NULL,
-  log_date VARCHAR(32) NOT NULL,
-  right_eye TEXT NULL,
-  left_eye TEXT NULL,
-  right_score DOUBLE NULL,
-  left_score DOUBLE NULL,
-  created_at VARCHAR(64) NOT NULL,
-  CONSTRAINT fk_progress_patient
-    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Patient master by OPD
+-- SELECT * FROM v_patients WHERE opd_ad_no = 'OPD-123';
 
-CREATE INDEX idx_progress_patient ON progress_logs(patient_id);
+-- Everything for one OPD (attendance + screening + diseases)
+-- SELECT 'attendance' AS kind, visit_date AS the_date, NULL AS detail
+-- FROM v_attendance WHERE opd_ad_no = 'OPD-123'
+-- UNION ALL
+-- SELECT 'screening', visit_date, diagnosis FROM v_visits WHERE opd_ad_no = 'OPD-123'
+-- UNION ALL
+-- SELECT 'disease', assessment_date, form_type FROM v_disease_assessments WHERE opd_ad_no = 'OPD-123'
+-- ORDER BY the_date DESC;
 
-CREATE TABLE IF NOT EXISTS attachments (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  patient_id INT NOT NULL,
-  visit_id INT NULL,
-  relative_path VARCHAR(512) NOT NULL,
-  original_name VARCHAR(512) NOT NULL,
-  mime_type VARCHAR(128) NULL,
-  created_at VARCHAR(64) NOT NULL,
-  CONSTRAINT fk_attachments_patient
-    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
-  CONSTRAINT fk_attachments_visit
-    FOREIGN KEY (visit_id) REFERENCES visits(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Who visited the clinic today
+-- SELECT opd_ad_no, patient_name, phone
+-- FROM v_attendance
+-- WHERE visit_date = CURDATE()
+-- ORDER BY patient_name;
 
-CREATE INDEX idx_attachments_patient ON attachments(patient_id);
+-- Join attendance to patient details explicitly by OPD
+-- SELECT p.*, a.visit_date
+-- FROM patients p
+-- JOIN clinic_attendance a ON a.opd_ad_no = p.opd_ad_no
+-- WHERE p.opd_ad_no = 'OPD-123';
 
-CREATE TABLE IF NOT EXISTS attachment_files (
-  relative_path VARCHAR(512) PRIMARY KEY,
-  content LONGBLOB NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Join screening visits by OPD
+-- SELECT p.opd_ad_no, p.name, v.visit_date, v.diagnosis
+-- FROM patients p
+-- JOIN visits v ON v.opd_ad_no = p.opd_ad_no
+-- WHERE p.opd_ad_no = 'OPD-123'
+-- ORDER BY v.visit_date DESC;
 
-CREATE TABLE IF NOT EXISTS backup_archives (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  zip_name VARCHAR(255) NOT NULL,
-  content LONGBLOB NOT NULL,
-  created_at VARCHAR(64) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Patient summary counts
+-- SELECT * FROM v_patient_summary WHERE opd_ad_no = 'OPD-123';
+-- SELECT * FROM v_patient_summary ORDER BY last_attendance_date DESC LIMIT 50;
 
-CREATE TABLE IF NOT EXISTS disease_assessments (
-  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  patient_id INT NOT NULL,
-  form_type VARCHAR(128) NOT NULL,
-  assessment_date VARCHAR(32) NOT NULL,
-  eye VARCHAR(16) NULL,
-  `data` LONGTEXT NULL,
-  notes TEXT NULL,
-  created_at VARCHAR(64) NOT NULL,
-  updated_at VARCHAR(64) NOT NULL,
-  CONSTRAINT fk_disease_patient
-    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX idx_disease_assessments_patient ON disease_assessments(patient_id);
-CREATE INDEX idx_disease_assessments_type ON disease_assessments(form_type);
-
-CREATE TABLE IF NOT EXISTS app_settings (
-  `key` VARCHAR(128) PRIMARY KEY,
-  value LONGTEXT NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS custom_disease_forms (
-  id VARCHAR(128) NOT NULL PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  short_title VARCHAR(255) NOT NULL,
-  fields LONGTEXT NOT NULL,
-  created_at VARCHAR(64) NOT NULL,
-  updated_at VARCHAR(64) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Search patient then pull related rows
+-- SET @opd := (SELECT opd_ad_no FROM patients WHERE name LIKE '%Silva%' LIMIT 1);
+-- SELECT * FROM v_attendance WHERE opd_ad_no = @opd;
+-- SELECT * FROM v_visits WHERE opd_ad_no = @opd;
+-- SELECT * FROM v_disease_assessments WHERE opd_ad_no = @opd;
+-- SELECT * FROM v_attachments WHERE opd_ad_no = @opd;

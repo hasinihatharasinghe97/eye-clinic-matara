@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
+  localClinicDate,
   type Attachment,
   type DiseaseAssessment,
   type Patient,
@@ -13,6 +14,7 @@ import { PatientChartsPanel } from './PatientCharts';
 import { CameraCapture } from '../components/CameraCapture';
 import { SendMedicineWhatsApp } from '../components/SendMedicineWhatsApp';
 import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { VisitTodayTick } from '../components/VisitTodayTick';
 
 function formatWhen(value: string) {
   if (!value) return '—';
@@ -59,17 +61,21 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [filterFormType, setFilterFormType] = useState('');
   const [newFormType, setNewFormType] = useState('');
+  const [visitedToday, setVisitedToday] = useState(false);
+  const [togglingVisit, setTogglingVisit] = useState(false);
+  const today = localClinicDate();
 
   const load = useCallback(async () => {
     try {
       const [p, v, l, a, d] = await Promise.all([
-        api.getPatient(patientId),
+        api.getPatient(patientId, today),
         api.listVisits(patientId),
         api.listProgress(patientId),
         api.listAttachments(patientId),
         api.listDiseaseAssessments(patientId),
       ]);
       setPatient(p);
+      setVisitedToday(Boolean(p.visitedToday));
       setVisits(v);
       setLogs(l);
       setFiles(a);
@@ -78,7 +84,21 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load patient');
     }
-  }, [patientId]);
+  }, [patientId, today]);
+
+  async function toggleVisitedToday(next: boolean) {
+    setTogglingVisit(true);
+    setError('');
+    try {
+      await api.setAttendance(patientId, next, today);
+      setVisitedToday(next);
+      setPatient((p) => (p ? { ...p, visitedToday: next } : p));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update visit mark');
+    } finally {
+      setTogglingVisit(false);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -190,6 +210,14 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 Conditions: {patientConditions.map(diseaseFormTitle).join(', ')}
               </p>
             )}
+            <div style={{ marginTop: '0.75rem' }}>
+              <VisitTodayTick
+                checked={visitedToday}
+                disabled={togglingVisit}
+                label={`Visited clinic today (${today})`}
+                onChange={toggleVisitedToday}
+              />
+            </div>
           </div>
           <div className="patient-header-actions">
             <button
@@ -271,20 +299,26 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       {active === 'visits' && (
         <div className="card">
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0 }}>Eye screening visits</h3>
+            <div>
+              <h3 style={{ margin: 0 }}>Eye screening forms (optional)</h3>
+              <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
+                Day-to-day attendance uses the <strong>Visited today</strong> tick above. Add a
+                screening form only when needed. Disease assessments stay under Diseases.
+              </p>
+            </div>
             <button
-              className="btn"
+              className="btn secondary"
               type="button"
               onClick={() => onNavigate(`/patients/${patientId}/visits/new`)}
             >
-              New visit
+              Add screening form
             </button>
           </div>
           {visits.length === 0 ? (
             <EmptyState
-              title="No visits yet"
-              hint="Add an eye screening visit to record vision, IOP, and findings."
-              actionLabel="New visit"
+              title="No screening forms yet"
+              hint="Mark Visited today for normal clinic days. Add a screening form only when you need full eye findings."
+              actionLabel="Add screening form"
               onAction={() => onNavigate(`/patients/${patientId}/visits/new`)}
             />
           ) : (

@@ -39,6 +39,12 @@ async function collectZipToBuffer() {
   const progress = await db.prepare('SELECT * FROM progress_logs').all();
   const attachments = await db.prepare('SELECT * FROM attachments').all();
   const diseaseAssessments = await db.prepare('SELECT * FROM disease_assessments').all();
+  let clinicAttendance = [];
+  try {
+    clinicAttendance = await db.prepare('SELECT * FROM clinic_attendance').all();
+  } catch {
+    clinicAttendance = [];
+  }
   let customForms = [];
   try {
     customForms = await db.prepare('SELECT * FROM custom_disease_forms').all();
@@ -51,12 +57,13 @@ async function collectZipToBuffer() {
     JSON.stringify(
       {
         exportedAt: new Date().toISOString(),
-        version: 2,
+        version: 3,
         patients,
         visits,
         progress_logs: progress,
         attachments: attachments.map(({ ...a }) => a),
         disease_assessments: diseaseAssessments,
+        clinic_attendance: clinicAttendance,
         custom_disease_forms: customForms,
         settings: {
           backupFolder: settings.backupFolder,

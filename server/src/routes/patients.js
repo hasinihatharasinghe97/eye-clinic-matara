@@ -1,13 +1,20 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import db, { UPLOADS_DIR, IS_CLOUD, deleteUploadFile } from '../db.js';
+import db, { UPLOADS_DIR, IS_CLOUD, deleteUploadFile, syncOpdToRelatedTables } from '../db.js';
 import { getPatientCharts } from './stats.js';
+import attendanceRouter from './attendance.js';
 
 const router = Router();
 
 function now() {
   return new Date().toISOString();
+}
+
+function normalizeDate(raw) {
+  const s = String(raw || '').trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return new Date().toISOString().slice(0, 10);
 }
 
 function parseConditions(value) {
@@ -41,7 +48,7 @@ function parseMedicinesSent(value) {
   return [...set].sort((a, b) => a - b);
 }
 
-function mapPatient(row) {
+function mapPatient(row, visitedToday = false) {
   if (!row) return null;
   return {
     id: row.id,
@@ -58,27 +65,43 @@ function mapPatient(row) {
     medicinesSent: parseMedicinesSent(row.medicines_sent),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    visitedToday: Boolean(visitedToday),
   };
 }
 
 router.get('/', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
+    const onDate = normalizeDate(req.query.onDate);
     let rows;
     if (q) {
       const like = `%${q}%`;
       rows = await db
         .prepare(
-          `SELECT * FROM patients
-           WHERE name LIKE ? OR opd_ad_no LIKE ? OR phone LIKE ? OR id_number LIKE ?
-           ORDER BY updated_at DESC
+          `SELECT p.*,
+                  CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS visited_today
+           FROM patients p
+           LEFT JOIN clinic_attendance a
+             ON a.patient_id = p.id AND a.visit_date = ?
+           WHERE p.name LIKE ? OR p.opd_ad_no LIKE ? OR p.phone LIKE ? OR p.id_number LIKE ?
+           ORDER BY visited_today DESC, p.updated_at DESC
            LIMIT 200`
         )
-        .all(like, like, like, like);
+        .all(onDate, like, like, like, like);
     } else {
-      rows = await db.prepare('SELECT * FROM patients ORDER BY updated_at DESC LIMIT 200').all();
+      rows = await db
+        .prepare(
+          `SELECT p.*,
+                  CASE WHEN a.id IS NULL THEN 0 ELSE 1 END AS visited_today
+           FROM patients p
+           LEFT JOIN clinic_attendance a
+             ON a.patient_id = p.id AND a.visit_date = ?
+           ORDER BY visited_today DESC, p.updated_at DESC
+           LIMIT 200`
+        )
+        .all(onDate);
     }
-    res.json(rows.map(mapPatient));
+    res.json(rows.map((r) => mapPatient(r, r.visited_today)));
   } catch (err) {
     console.error('[patients] list failed:', err);
     res.status(500).json({ error: err.message || 'Could not load patients' });
@@ -103,6 +126,7 @@ router.get('/recent-visits', async (_req, res) => {
   }
 });
 
+router.use('/:patientId/attendance', attendanceRouter);
 router.get('/:id/charts', async (req, res) => {
   try {
     const data = await getPatientCharts(req.params.id);
@@ -116,7 +140,11 @@ router.get('/:id/charts', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Patient not found' });
-  res.json(mapPatient(row));
+  const onDate = normalizeDate(req.query.onDate);
+  const attendance = await db
+    .prepare('SELECT id FROM clinic_attendance WHERE patient_id = ? AND visit_date = ?')
+    .get(req.params.id, onDate);
+  res.json(mapPatient(row, Boolean(attendance)));
 });
 
 router.post('/', async (req, res) => {
@@ -179,6 +207,7 @@ router.put('/:id', async (req, res) => {
       ts,
       req.params.id
     );
+  await syncOpdToRelatedTables(req.params.id, body.opdAdNo || null);
   const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
   res.json(mapPatient(row));
 });

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import db from '../db.js';
+import db, { getPatientOpd } from '../db.js';
 
 const router = Router({ mergeParams: true });
 
@@ -19,6 +19,7 @@ function mapLog(row) {
   return {
     id: row.id,
     patientId: row.patient_id,
+    opdAdNo: row.opd_ad_no ?? null,
     logDate: row.log_date,
     rightEye: row.right_eye,
     leftEye: row.left_eye,
@@ -42,14 +43,16 @@ router.post('/', async (req, res) => {
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   const body = req.body || {};
   const ts = now();
+  const opdAdNo = await getPatientOpd(req.params.patientId);
   const result = await db
     .prepare(
       `INSERT INTO progress_logs (
-        patient_id, log_date, right_eye, left_eye, right_score, left_score, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+        patient_id, opd_ad_no, log_date, right_eye, left_eye, right_score, left_score, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       req.params.patientId,
+      opdAdNo,
       body.logDate || ts.slice(0, 10),
       body.rightEye || null,
       body.leftEye || null,

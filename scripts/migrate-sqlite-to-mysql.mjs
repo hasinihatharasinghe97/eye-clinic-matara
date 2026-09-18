@@ -58,6 +58,7 @@ function loadFromSnapshot(filePath) {
     progress_logs: snap.progress_logs || [],
     attachments: snap.attachments || [],
     disease_assessments: snap.disease_assessments || [],
+    clinic_attendance: snap.clinic_attendance || [],
     custom_disease_forms: snap.custom_disease_forms || [],
   };
 }
@@ -87,11 +88,12 @@ const {
   progress_logs,
   attachments,
   disease_assessments,
+  clinic_attendance = [],
   custom_disease_forms,
 } = data;
 
 console.log(
-  `Found ${patients.length} patients, ${visits.length} visits, ${progress_logs.length} progress logs, ${attachments.length} attachments, ${disease_assessments.length} assessments, ${custom_disease_forms.length} custom forms`
+  `Found ${patients.length} patients, ${visits.length} visits, ${progress_logs.length} progress logs, ${attachments.length} attachments, ${disease_assessments.length} assessments, ${(clinic_attendance || []).length} attendance, ${custom_disease_forms.length} custom forms`
 );
 
 const { db } = await import('../server/src/db.js');
@@ -221,6 +223,20 @@ for (const row of disease_assessments) {
       row.created_at,
       row.updated_at
     );
+}
+
+if ((clinic_attendance || []).length) {
+  console.log('Writing clinic attendance…');
+  for (const row of clinic_attendance) {
+    const patientId = patientMap.get(String(row.patient_id));
+    if (!patientId) continue;
+    await db
+      .prepare(
+        `INSERT IGNORE INTO clinic_attendance (patient_id, visit_date, created_at)
+         VALUES (?, ?, ?)`
+      )
+      .run(patientId, row.visit_date, row.created_at ?? new Date().toISOString());
+  }
 }
 
 if (custom_disease_forms.length) {

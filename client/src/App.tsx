@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   api,
   isLoggedIn,
+  localClinicDate,
   setToken,
   type Patient,
   type SystemSettings,
@@ -15,6 +16,7 @@ import { StatsPage } from './pages/StatsPage';
 import { FormBuilderPage } from './pages/FormBuilderPage';
 import { diseaseFormTitle } from './diseaseForms/catalog';
 import { EmptyState, LoadingBlock, PageNav, type Crumb } from './components/PageNav';
+import { VisitTodayTick } from './components/VisitTodayTick';
 
 type Route =
   | { name: 'dashboard' }
@@ -252,6 +254,8 @@ function Dashboard() {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const today = localClinicDate();
 
   useEffect(() => {
     let cancelled = false;
@@ -259,7 +263,7 @@ function Dashboard() {
     const t = setTimeout(async () => {
       try {
         const [list, visits, s] = await Promise.all([
-          api.listPatients(q),
+          api.listPatients(q, today),
           api.recentVisits(),
           api.getSettings(),
         ]);
@@ -279,7 +283,24 @@ function Dashboard() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [q]);
+  }, [q, today]);
+
+  async function toggleVisited(patientId: string, visited: boolean) {
+    setTogglingId(patientId);
+    setError('');
+    try {
+      await api.setAttendance(patientId, visited, today);
+      setPatients((prev) =>
+        prev.map((p) => (p.id === patientId ? { ...p, visitedToday: visited } : p))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update visit mark');
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  const visitedCount = patients.filter((p) => p.visitedToday).length;
 
   const backupStale = useMemo(() => {
     if (!settings) return false;
@@ -313,7 +334,9 @@ function Dashboard() {
               ? 'Loading…'
               : q
                 ? `${patients.length} match${patients.length === 1 ? '' : 'es'}`
-                : `${patients.length} patient${patients.length === 1 ? '' : 's'}`}
+                : `${patients.length} patient${patients.length === 1 ? '' : 's'}${
+                    visitedCount ? ` · ${visitedCount} visited today` : ''
+                  }`}
           </p>
         </div>
         <div className="page-toolbar-actions">
@@ -368,6 +391,7 @@ function Dashboard() {
             <table className="table">
               <thead>
                 <tr>
+                  <th>Today</th>
                   <th>Name</th>
                   <th>OPD</th>
                   <th>Age / Gender</th>
@@ -378,6 +402,14 @@ function Dashboard() {
               <tbody>
                 {patients.map((p) => (
                   <tr key={p.id} className="clickable-row" onClick={() => navigate(`/patients/${p.id}`)}>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <VisitTodayTick
+                        checked={Boolean(p.visitedToday)}
+                        disabled={togglingId === p.id}
+                        label="Visited"
+                        onChange={(next) => toggleVisited(p.id, next)}
+                      />
+                    </td>
                     <td>
                       <a
                         href={`#/patients/${p.id}`}
@@ -415,17 +447,25 @@ function Dashboard() {
           <ul className="mobile-list mobile-only">
             {patients.map((p) => (
               <li key={p.id}>
-                <button
-                  type="button"
-                  className="mobile-list-item"
-                  onClick={() => navigate(`/patients/${p.id}`)}
-                >
-                  <span className="mobile-list-title">{p.name}</span>
-                  <span className="mobile-list-meta">
-                    OPD {p.opdAdNo || '—'} · {p.age ?? '—'} / {p.gender || '—'}
-                  </span>
-                  <span className="mobile-list-meta">{p.phone || 'No phone'}</span>
-                </button>
+                <div className="mobile-list-card">
+                  <VisitTodayTick
+                    checked={Boolean(p.visitedToday)}
+                    disabled={togglingId === p.id}
+                    label="Visited"
+                    onChange={(next) => toggleVisited(p.id, next)}
+                  />
+                  <button
+                    type="button"
+                    className="mobile-list-item"
+                    onClick={() => navigate(`/patients/${p.id}`)}
+                  >
+                    <span className="mobile-list-title">{p.name}</span>
+                    <span className="mobile-list-meta">
+                      OPD {p.opdAdNo || '—'} · {p.age ?? '—'} / {p.gender || '—'}
+                    </span>
+                    <span className="mobile-list-meta">{p.phone || 'No phone'}</span>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

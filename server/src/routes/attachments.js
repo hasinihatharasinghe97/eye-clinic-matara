@@ -2,7 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import multer from 'multer';
-import db, { storeUploadFile, deleteUploadFile } from '../db.js';
+import db, { storeUploadFile, deleteUploadFile, getPatientOpd } from '../db.js';
 
 const router = Router({ mergeParams: true });
 
@@ -72,13 +72,15 @@ router.post('/', (req, res) => {
 
       await storeUploadFile(relativePath, req.file.buffer);
 
+      const opdAdNo = await getPatientOpd(req.params.patientId);
       const result = await db
         .prepare(
-          `INSERT INTO attachments (patient_id, visit_id, relative_path, original_name, mime_type, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT INTO attachments (patient_id, opd_ad_no, visit_id, relative_path, original_name, mime_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           req.params.patientId,
+          opdAdNo,
           visitId,
           relativePath,
           req.file.originalname,

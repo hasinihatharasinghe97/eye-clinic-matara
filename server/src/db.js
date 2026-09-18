@@ -207,6 +207,7 @@ await exec(`
   CREATE TABLE IF NOT EXISTS visits (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
+    opd_ad_no VARCHAR(128) NULL,
     visit_date VARCHAR(32) NOT NULL,
     co_complaints TEXT NULL,
     oc_other TEXT NULL,
@@ -231,6 +232,7 @@ await exec(`
   CREATE TABLE IF NOT EXISTS progress_logs (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
+    opd_ad_no VARCHAR(128) NULL,
     log_date VARCHAR(32) NOT NULL,
     right_eye TEXT NULL,
     left_eye TEXT NULL,
@@ -244,6 +246,7 @@ await exec(`
   CREATE TABLE IF NOT EXISTS attachments (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
+    opd_ad_no VARCHAR(128) NULL,
     visit_id INT NULL,
     relative_path VARCHAR(512) NOT NULL,
     original_name VARCHAR(512) NOT NULL,
@@ -270,6 +273,7 @@ await exec(`
   CREATE TABLE IF NOT EXISTS disease_assessments (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
+    opd_ad_no VARCHAR(128) NULL,
     form_type VARCHAR(128) NOT NULL,
     assessment_date VARCHAR(32) NOT NULL,
     eye VARCHAR(16) NULL,
@@ -294,6 +298,17 @@ await exec(`
     created_at VARCHAR(64) NOT NULL,
     updated_at VARCHAR(64) NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+  CREATE TABLE IF NOT EXISTS clinic_attendance (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    opd_ad_no VARCHAR(128) NULL,
+    visit_date VARCHAR(32) NOT NULL,
+    created_at VARCHAR(64) NOT NULL,
+    UNIQUE KEY uq_attendance_patient_date (patient_id, visit_date),
+    CONSTRAINT fk_attendance_patient
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `);
 
 await ensureIndex('idx_patients_name', 'patients', 'name');
@@ -306,6 +321,8 @@ await ensureIndex('idx_progress_patient', 'progress_logs', 'patient_id');
 await ensureIndex('idx_attachments_patient', 'attachments', 'patient_id');
 await ensureIndex('idx_disease_assessments_patient', 'disease_assessments', 'patient_id');
 await ensureIndex('idx_disease_assessments_type', 'disease_assessments', 'form_type');
+await ensureIndex('idx_attendance_date', 'clinic_attendance', 'visit_date');
+await ensureIndex('idx_attendance_patient', 'clinic_attendance', 'patient_id');
 
 async function tableColumns(tableName) {
   const rows = await db
@@ -591,6 +608,32 @@ async function migrateIdsToAutoIncrement() {
 
 await migrateIdsToAutoIncrement();
 
+async function ensureColumn(tableName, columnName, columnSql) {
+  const cols = await tableColumns(tableName);
+  if (!cols.some((c) => c.name === columnName)) {
+    await exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnSql}`);
+  }
+}
+
+/** Copy patients.opd_ad_no onto related rows so SQL can join / filter by OPD. */
+export async function syncOpdToRelatedTables(patientId, opdAdNo) {
+  const opd = opdAdNo ? String(opdAdNo).trim() || null : null;
+  await db.prepare('UPDATE visits SET opd_ad_no = ? WHERE patient_id = ?').run(opd, patientId);
+  await db.prepare('UPDATE progress_logs SET opd_ad_no = ? WHERE patient_id = ?').run(opd, patientId);
+  await db.prepare('UPDATE attachments SET opd_ad_no = ? WHERE patient_id = ?').run(opd, patientId);
+  await db
+    .prepare('UPDATE disease_assessments SET opd_ad_no = ? WHERE patient_id = ?')
+    .run(opd, patientId);
+  await db
+    .prepare('UPDATE clinic_attendance SET opd_ad_no = ? WHERE patient_id = ?')
+    .run(opd, patientId);
+}
+
+export async function getPatientOpd(patientId) {
+  const row = await db.prepare('SELECT opd_ad_no FROM patients WHERE id = ?').get(patientId);
+  return row?.opd_ad_no ? String(row.opd_ad_no).trim() || null : null;
+}
+
 // Migrate older DBs that predate newer columns
 {
   const patientCols = await tableColumns('patients');
@@ -607,6 +650,167 @@ await migrateIdsToAutoIncrement();
   if (!progressCols.some((c) => c.name === 'left_score')) {
     await exec('ALTER TABLE progress_logs ADD COLUMN left_score DOUBLE NULL');
   }
+
+  await ensureColumn('visits', 'opd_ad_no', 'opd_ad_no VARCHAR(128) NULL');
+  await ensureColumn('progress_logs', 'opd_ad_no', 'opd_ad_no VARCHAR(128) NULL');
+  await ensureColumn('attachments', 'opd_ad_no', 'opd_ad_no VARCHAR(128) NULL');
+  await ensureColumn('disease_assessments', 'opd_ad_no', 'opd_ad_no VARCHAR(128) NULL');
+  await ensureColumn('clinic_attendance', 'opd_ad_no', 'opd_ad_no VARCHAR(128) NULL');
+
+  // Backfill OPD onto child rows from patients
+  await exec(`
+    UPDATE visits v
+    INNER JOIN patients p ON p.id = v.patient_id
+    SET v.opd_ad_no = p.opd_ad_no
+    WHERE (v.opd_ad_no IS NULL OR v.opd_ad_no = '') AND p.opd_ad_no IS NOT NULL AND p.opd_ad_no <> ''
+  `);
+  await exec(`
+    UPDATE progress_logs g
+    INNER JOIN patients p ON p.id = g.patient_id
+    SET g.opd_ad_no = p.opd_ad_no
+    WHERE (g.opd_ad_no IS NULL OR g.opd_ad_no = '') AND p.opd_ad_no IS NOT NULL AND p.opd_ad_no <> ''
+  `);
+  await exec(`
+    UPDATE attachments a
+    INNER JOIN patients p ON p.id = a.patient_id
+    SET a.opd_ad_no = p.opd_ad_no
+    WHERE (a.opd_ad_no IS NULL OR a.opd_ad_no = '') AND p.opd_ad_no IS NOT NULL AND p.opd_ad_no <> ''
+  `);
+  await exec(`
+    UPDATE disease_assessments d
+    INNER JOIN patients p ON p.id = d.patient_id
+    SET d.opd_ad_no = p.opd_ad_no
+    WHERE (d.opd_ad_no IS NULL OR d.opd_ad_no = '') AND p.opd_ad_no IS NOT NULL AND p.opd_ad_no <> ''
+  `);
+  await exec(`
+    UPDATE clinic_attendance c
+    INNER JOIN patients p ON p.id = c.patient_id
+    SET c.opd_ad_no = p.opd_ad_no
+    WHERE (c.opd_ad_no IS NULL OR c.opd_ad_no = '') AND p.opd_ad_no IS NOT NULL AND p.opd_ad_no <> ''
+  `);
+
+  await ensureIndex('idx_visits_opd', 'visits', 'opd_ad_no');
+  await ensureIndex('idx_progress_opd', 'progress_logs', 'opd_ad_no');
+  await ensureIndex('idx_attachments_opd', 'attachments', 'opd_ad_no');
+  await ensureIndex('idx_disease_assessments_opd', 'disease_assessments', 'opd_ad_no');
+  await ensureIndex('idx_attendance_opd', 'clinic_attendance', 'opd_ad_no');
+}
+
+/** Convenience views for reporting — join / filter by OPD number. */
+try {
+  await exec(`
+  CREATE OR REPLACE VIEW v_patients AS
+  SELECT
+    id AS patient_id,
+    opd_ad_no,
+    name,
+    age,
+    gender,
+    phone,
+    address,
+    occupation,
+    id_number,
+    registration_date,
+    conditions,
+    medicines_sent,
+    created_at,
+    updated_at
+  FROM patients;
+
+  CREATE OR REPLACE VIEW v_visits AS
+  SELECT
+    v.id AS visit_id,
+    v.patient_id,
+    COALESCE(v.opd_ad_no, p.opd_ad_no) AS opd_ad_no,
+    p.name AS patient_name,
+    p.phone AS patient_phone,
+    v.visit_date,
+    v.diagnosis,
+    v.iop,
+    v.notes,
+    v.co_complaints,
+    v.vision,
+    v.inspection,
+    v.slit_lamp,
+    v.cataract,
+    v.created_at,
+    v.updated_at
+  FROM visits v
+  INNER JOIN patients p ON p.id = v.patient_id;
+
+  CREATE OR REPLACE VIEW v_attendance AS
+  SELECT
+    c.id AS attendance_id,
+    c.patient_id,
+    COALESCE(c.opd_ad_no, p.opd_ad_no) AS opd_ad_no,
+    p.name AS patient_name,
+    p.phone AS patient_phone,
+    c.visit_date,
+    c.created_at
+  FROM clinic_attendance c
+  INNER JOIN patients p ON p.id = c.patient_id;
+
+  CREATE OR REPLACE VIEW v_disease_assessments AS
+  SELECT
+    d.id AS assessment_id,
+    d.patient_id,
+    COALESCE(d.opd_ad_no, p.opd_ad_no) AS opd_ad_no,
+    p.name AS patient_name,
+    d.form_type,
+    d.assessment_date,
+    d.eye,
+    d.notes,
+    d.created_at,
+    d.updated_at
+  FROM disease_assessments d
+  INNER JOIN patients p ON p.id = d.patient_id;
+
+  CREATE OR REPLACE VIEW v_progress_logs AS
+  SELECT
+    g.id AS progress_id,
+    g.patient_id,
+    COALESCE(g.opd_ad_no, p.opd_ad_no) AS opd_ad_no,
+    p.name AS patient_name,
+    g.log_date,
+    g.right_eye,
+    g.left_eye,
+    g.right_score,
+    g.left_score,
+    g.created_at
+  FROM progress_logs g
+  INNER JOIN patients p ON p.id = g.patient_id;
+
+  CREATE OR REPLACE VIEW v_attachments AS
+  SELECT
+    a.id AS attachment_id,
+    a.patient_id,
+    COALESCE(a.opd_ad_no, p.opd_ad_no) AS opd_ad_no,
+    p.name AS patient_name,
+    a.visit_id,
+    a.original_name,
+    a.mime_type,
+    a.relative_path,
+    a.created_at
+  FROM attachments a
+  INNER JOIN patients p ON p.id = a.patient_id;
+
+  CREATE OR REPLACE VIEW v_patient_summary AS
+  SELECT
+    p.id AS patient_id,
+    p.opd_ad_no,
+    p.name,
+    p.phone,
+    p.age,
+    p.gender,
+    (SELECT COUNT(*) FROM clinic_attendance c WHERE c.patient_id = p.id) AS attendance_days,
+    (SELECT COUNT(*) FROM visits v WHERE v.patient_id = p.id) AS screening_forms,
+    (SELECT COUNT(*) FROM disease_assessments d WHERE d.patient_id = p.id) AS disease_assessments,
+    (SELECT MAX(c.visit_date) FROM clinic_attendance c WHERE c.patient_id = p.id) AS last_attendance_date
+  FROM patients p;
+`);
+  console.log('[db] Query views ready (v_patients, v_attendance, v_visits, …)');
+} catch (err) {
+  console.warn('[db] Could not create reporting views:', err?.message || err);
 }
 
 const SETTINGS_KEY = 'clinic_settings';
