@@ -17,6 +17,7 @@ const outPath = path.resolve(
 );
 
 const { db, getSettings } = await import('../server/src/db.js');
+const { clinicTimestamp } = await import('../server/src/clinicDate.js');
 
 const patients = await db.prepare('SELECT * FROM patients').all();
 const visits = await db.prepare('SELECT * FROM visits').all();
@@ -41,7 +42,7 @@ try {
 const settings = await getSettings();
 
 const snap = {
-  exportedAt: new Date().toISOString(),
+  exportedAt: clinicTimestamp(),
   version: 3,
   patients,
   visits,

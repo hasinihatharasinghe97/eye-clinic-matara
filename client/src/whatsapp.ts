@@ -1,4 +1,4 @@
-/** Normalize local/international numbers for wa.me (default Sri Lanka +94). */
+/** Normalize local/international numbers for WhatsApp (default Sri Lanka +94). */
 export function toWhatsAppNumber(raw: string, defaultCountry = '94'): string | null {
   let digits = String(raw || '').replace(/\D/g, '');
   if (!digits) return null;
@@ -21,10 +21,33 @@ export function toWhatsAppNumber(raw: string, defaultCountry = '94'): string | n
   return digits;
 }
 
-export function whatsAppChatUrl(phoneDigits: string, message: string): string {
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/** Universal link — works on phones; on desktop shows the wa.me landing page. */
+export function whatsAppMeUrl(phoneDigits: string, message: string): string {
   const text = String(message || '').trim();
   if (!text) return `https://wa.me/${phoneDigits}`;
   return `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Opens WhatsApp Web chat directly (desktop clinic PC / browser).
+ * Avoids the wa.me “Open app / Continue to WhatsApp Web” interstitial.
+ */
+export function whatsAppWebUrl(phoneDigits: string, message: string): string {
+  const text = String(message || '').trim();
+  const base = `https://web.whatsapp.com/send?phone=${phoneDigits}`;
+  if (!text) return base;
+  return `${base}&text=${encodeURIComponent(text)}`;
+}
+
+/** Best https URL for the current device. */
+export function whatsAppChatUrl(phoneDigits: string, message: string): string {
+  return isMobileBrowser()
+    ? whatsAppMeUrl(phoneDigits, message)
+    : whatsAppWebUrl(phoneDigits, message);
 }
 
 /** Native app deep link — often opens the WhatsApp app chat faster on phones. */
@@ -98,13 +121,14 @@ export async function sharePdfToWhatsApp(opts: {
 
 /**
  * Open WhatsApp chat with this phone + message.
+ * Desktop → WhatsApp Web directly; phone → app deep link with wa.me fallback.
  * Must be called from a user tap when possible; pass a pre-opened window if you opened
  * `about:blank` synchronously before any `await`.
  */
 export function openWhatsAppChat(phoneDigits: string, message: string, preOpened?: Window | null) {
   const httpsUrl = whatsAppChatUrl(phoneDigits, message);
   const appUrl = whatsAppAppLink(phoneDigits, message);
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isMobile = isMobileBrowser();
 
   if (preOpened && !preOpened.closed) {
     preOpened.location.href = isMobile ? appUrl : httpsUrl;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Patient } from '../api';
+import { api, localClinicDate, type Patient } from '../api';
 import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
 
 type Props = {
@@ -8,11 +8,10 @@ type Props = {
   onCancel: () => void;
 };
 
-const empty: Partial<Patient> & { name: string; conditions: string[] } = {
+const emptyBase: Partial<Patient> & { name: string; conditions: string[] } = {
   name: '',
   age: null,
   gender: '',
-  registrationDate: new Date().toISOString().slice(0, 10),
   opdAdNo: '',
   occupation: '',
   idNumber: '',
@@ -21,9 +20,13 @@ const empty: Partial<Patient> & { name: string; conditions: string[] } = {
   conditions: [],
 };
 
+function emptyForm() {
+  return { ...emptyBase, registrationDate: localClinicDate() };
+}
+
 export function PatientForm({ patientId, onDone, onCancel }: Props) {
   const { forms: DISEASE_FORMS } = useDiseaseForms();
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const editing = Boolean(patientId);

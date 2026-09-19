@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { google } from 'googleapis';
 import { getSettings, saveSettings } from './db.js';
+import { clinicTimestamp } from './clinicDate.js';
 
 const DRIVE_FILE_PREFIX = 'Nethraloka-Daily-';
 const COLOMBO_TZ = 'Asia/Colombo';
@@ -147,7 +148,7 @@ export async function uploadBackupBufferToDrive(buffer, { dateKey } = {}) {
     /* listing optional */
   }
 
-  const uploadedAt = new Date().toISOString();
+  const uploadedAt = clinicTimestamp();
   await saveSettings({
     lastDriveBackupAt: uploadedAt,
     lastDriveBackupDate: day,

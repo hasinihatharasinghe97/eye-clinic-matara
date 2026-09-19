@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { clinicMonthKey } from '../clinicDate.js';
 import {
   ageBand,
   buildMonthlyActivity,
@@ -27,8 +28,7 @@ router.get('/', async (_req, res) => {
     const progress = await db.prepare('SELECT * FROM progress_logs').all();
     const assessments = await db.prepare('SELECT * FROM disease_assessments').all();
 
-    const now = new Date();
-    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const thisMonth = clinicMonthKey();
 
     const genderCounts = { M: 0, F: 0, Other: 0 };
     const ageBands = {};

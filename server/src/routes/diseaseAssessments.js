@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
+import { normalizeClinicDate, normalizeFormDataDates, nowClinic } from '../clinicDate.js';
 
 const router = Router({ mergeParams: true });
 
@@ -28,18 +29,12 @@ async function isValidFormType(formType) {
 }
 
 function now() {
-  return new Date().toISOString();
+  return nowClinic();
 }
 
-/** Store assessment dates as YYYY-MM-DD (same as other clinic records). */
-function normalizeAssessmentDate(value, fallbackIso) {
-  const raw = String(value || '').trim();
-  if (!raw) return String(fallbackIso || now()).slice(0, 10);
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (m) return m[1];
-  const d = new Date(raw);
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  return String(fallbackIso || now()).slice(0, 10);
+/** Store assessment dates as YYYY-MM-DD (clinic calendar day). */
+function normalizeAssessmentDate(value) {
+  return normalizeClinicDate(value);
 }
 
 function parseJson(value, fallback = {}) {
@@ -112,8 +107,9 @@ router.post('/', async (req, res) => {
   }
 
   const ts = now();
-  const assessmentDate = normalizeAssessmentDate(body.assessmentDate, ts);
+  const assessmentDate = normalizeAssessmentDate(body.assessmentDate);
   const opdAdNo = await getPatientOpd(req.params.patientId);
+  const dataJson = JSON.stringify(normalizeFormDataDates(body.data || {}));
   const result = await db
     .prepare(
       `INSERT INTO disease_assessments (
@@ -126,7 +122,7 @@ router.post('/', async (req, res) => {
       formType,
       assessmentDate,
       body.eye || null,
-      JSON.stringify(body.data || {}),
+      dataJson,
       body.notes || null,
       ts,
       ts
@@ -146,6 +142,10 @@ router.put('/:assessmentId', async (req, res) => {
 
   const body = req.body || {};
   const ts = now();
+  const dataPayload =
+    body.data !== undefined
+      ? normalizeFormDataDates(body.data)
+      : normalizeFormDataDates(parseJson(existing.data, {}));
   await db
     .prepare(
       `UPDATE disease_assessments SET
@@ -153,9 +153,9 @@ router.put('/:assessmentId', async (req, res) => {
        WHERE id = ?`
     )
     .run(
-      normalizeAssessmentDate(body.assessmentDate ?? existing.assessment_date, ts),
+      normalizeAssessmentDate(body.assessmentDate ?? existing.assessment_date),
       body.eye ?? existing.eye,
-      JSON.stringify(body.data ?? parseJson(existing.data, {})),
+      JSON.stringify(dataPayload),
       body.notes ?? existing.notes,
       ts,
       req.params.assessmentId

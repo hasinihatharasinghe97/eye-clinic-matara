@@ -6,7 +6,10 @@
 --   - patients.opd_ad_no   = clinic OPD number (human key for SQL reports)
 --   - Related tables keep patient_id AND a copied opd_ad_no for easy joins/filters
 --
--- Prefer the v_* views below when exploring data in DBeaver / MySQL Workbench.
+-- Date storage (VARCHAR):
+--   Calendar days  → YYYY-MM-DD                 e.g. 2026-09-19
+--   Timestamps     → YYYY-MM-DDTHH:mm:ss+05:30  e.g. 2026-09-19T14:30:00+05:30
+-- Always Asia/Colombo. Do not use UTC Z timestamps for clinic fields.
 
 CREATE DATABASE IF NOT EXISTS eye_clinic
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -48,10 +51,10 @@ USE eye_clinic;
 -- SELECT 'disease', assessment_date, form_type FROM v_disease_assessments WHERE opd_ad_no = 'OPD-123'
 -- ORDER BY the_date DESC;
 
--- Who visited the clinic today
+-- Who visited the clinic today (use Asia/Colombo — HeatWave/MySQL CURDATE() is often UTC)
 -- SELECT opd_ad_no, patient_name, phone
 -- FROM v_attendance
--- WHERE visit_date = CURDATE()
+-- WHERE visit_date = DATE_FORMAT(CONVERT_TZ(UTC_TIMESTAMP(), 'UTC', 'Asia/Colombo'), '%Y-%m-%d')
 -- ORDER BY patient_name;
 
 -- Join attendance to patient details explicitly by OPD

@@ -262,18 +262,39 @@ const DISEASES = [
   },
 ];
 
+function clinicTimestamp(d = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type) => parts.find((p) => p.type === type)?.value || '00';
+  let hour = get('hour');
+  if (hour === '24') hour = '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}:${get('second')}+05:30`;
+}
+
+function clinicDay(d = new Date()) {
+  return clinicTimestamp(d).slice(0, 10);
+}
+
 function isoDaysAgo(days, withTime = false) {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  if (!withTime) return d.toISOString().slice(0, 10);
-  return d.toISOString().slice(0, 16);
+  if (!withTime) return clinicDay(d);
+  return clinicTimestamp(d);
 }
 
 function monthsAgoDate(months, dayOffset = 0) {
   const d = new Date();
   d.setMonth(d.getMonth() - months);
   d.setDate(d.getDate() - dayOffset);
-  return d.toISOString().slice(0, 10);
+  return clinicDay(d);
 }
 
 async function clearDemoPatients() {
@@ -296,7 +317,7 @@ async function seed() {
 
   for (let p = 0; p < DISEASES.length; p++) {
     const def = DISEASES[p];
-    const ts = new Date().toISOString();
+    const ts = clinicTimestamp();
     const regDate = monthsAgoDate(8 - Math.min(p, 6));
     const opd = `DEMO-${String(p + 1).padStart(3, '0')}`;
 
@@ -435,7 +456,7 @@ async function seed() {
 
   // One multi-disease patient for overall stats mix
   {
-    const ts = new Date().toISOString();
+    const ts = clinicTimestamp();
     const conditions = ['cataract', 'diabetic_retinopathy', 'hypertensive_retinopathy'];
     const result = await db
       .prepare(

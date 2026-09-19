@@ -2,19 +2,14 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import db, { UPLOADS_DIR, IS_CLOUD, deleteUploadFile, syncOpdToRelatedTables } from '../db.js';
+import { normalizeClinicDate, clinicCalendarDate, nowClinic } from '../clinicDate.js';
 import { getPatientCharts } from './stats.js';
 import attendanceRouter from './attendance.js';
 
 const router = Router();
 
 function now() {
-  return new Date().toISOString();
-}
-
-function normalizeDate(raw) {
-  const s = String(raw || '').trim().slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  return new Date().toISOString().slice(0, 10);
+  return nowClinic();
 }
 
 function parseConditions(value) {
@@ -72,7 +67,7 @@ function mapPatient(row, visitedToday = false) {
 router.get('/', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
-    const onDate = normalizeDate(req.query.onDate);
+    const onDate = normalizeClinicDate(req.query.onDate);
     let rows;
     if (q) {
       const like = `%${q}%`;
@@ -141,7 +136,7 @@ router.get('/:id/charts', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Patient not found' });
-  const onDate = normalizeDate(req.query.onDate);
+  const onDate = normalizeClinicDate(req.query.onDate);
   const attendance = await db
     .prepare('SELECT id FROM clinic_attendance WHERE patient_id = ? AND visit_date = ?')
     .get(req.params.id, onDate);
@@ -164,7 +159,7 @@ router.post('/', async (req, res) => {
       body.name.trim(),
       body.age ?? null,
       body.gender || null,
-      body.registrationDate || ts.slice(0, 10),
+      body.registrationDate ? normalizeClinicDate(body.registrationDate) : clinicCalendarDate(),
       body.opdAdNo || null,
       body.occupation || null,
       body.idNumber || null,
@@ -198,7 +193,9 @@ router.put('/:id', async (req, res) => {
       body.name.trim(),
       body.age ?? null,
       body.gender || null,
-      body.registrationDate || existing.registration_date,
+      body.registrationDate
+        ? normalizeClinicDate(body.registrationDate)
+        : existing.registration_date,
       body.opdAdNo || null,
       body.occupation || null,
       body.idNumber || null,

@@ -129,7 +129,20 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
 
   async function save() {
     if (!blob) return;
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Colombo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)?.value || '00';
+    let hour = get('hour');
+    if (hour === '24') hour = '00';
+    const stamp = `${get('year')}-${get('month')}-${get('day')}T${hour}-${get('minute')}-${get('second')}`;
     const file = new File([blob], `camera-${stamp}.jpg`, { type: 'image/jpeg' });
     await onCapture(file);
   }

@@ -151,25 +151,57 @@ export function htmlInputType(kind: InputKind): string {
 }
 
 export function nowDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+function colomboParts(d = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '00';
+  let hour = get('hour');
+  if (hour === '24') hour = '00';
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour,
+    minute: get('minute'),
+  };
 }
 
 export function nowDateTimeLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = colomboParts();
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
 /** Normalize stored values into what <input type="datetime-local"> expects. */
 export function toDateTimeLocalValue(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) return raw.slice(0, 16);
+  // Canonical clinic storage: YYYY-MM-DDTHH:mm:ss+05:30
+  const clinic = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?\+05:30$/);
+  if (clinic) return `${clinic[1]}T${clinic[2]}:${clinic[3]}`;
+  // Already a naive wall-clock value from the form — keep as-is
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(raw)) {
+    return raw.slice(0, 16);
+  }
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00`;
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+    const p = colomboParts(parsed);
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
   }
   return '';
 }
@@ -177,8 +209,17 @@ export function toDateTimeLocalValue(value: unknown): string {
 export function toDateValue(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  // Canonical clinic datetime or naive datetime → calendar day
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(raw)) {
+    return raw.slice(0, 10);
+  }
   const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return '';
+  if (Number.isNaN(parsed.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(parsed);
 }

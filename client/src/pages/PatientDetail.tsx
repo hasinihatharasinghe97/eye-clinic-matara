@@ -17,10 +17,13 @@ import { VisitTodayTick } from '../components/VisitTodayTick';
 
 function formatWhen(value: string) {
   if (!value) return '—';
+  // Keep YYYY-MM-DD as a calendar day (avoid UTC Date parsing shifting the day)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, day] = value.split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString();
+  }
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  // date-only strings show as local date; datetimes show with time
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return d.toLocaleDateString();
   return d.toLocaleString();
 }
 
@@ -38,7 +41,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const [assessments, setAssessments] = useState<DiseaseAssessment[]>([]);
   const [error, setError] = useState('');
   const [logForm, setLogForm] = useState({
-    logDate: new Date().toISOString().slice(0, 10),
+    logDate: localClinicDate(),
     rightEye: '',
     leftEye: '',
     rightScore: '' as string,
@@ -123,7 +126,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
         leftScore: logForm.leftScore === '' ? null : Number(logForm.leftScore),
       });
       setLogForm({
-        logDate: new Date().toISOString().slice(0, 10),
+        logDate: localClinicDate(),
         rightEye: '',
         leftEye: '',
         rightScore: '',

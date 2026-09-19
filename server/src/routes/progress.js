@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
+import { clinicCalendarDate, normalizeClinicDate, nowClinic } from '../clinicDate.js';
 
 const router = Router({ mergeParams: true });
 
 function now() {
-  return new Date().toISOString();
+  return nowClinic();
 }
 
 function toScore(value) {
@@ -53,7 +54,7 @@ router.post('/', async (req, res) => {
     .run(
       req.params.patientId,
       opdAdNo,
-      body.logDate || ts.slice(0, 10),
+      body.logDate ? normalizeClinicDate(body.logDate) : clinicCalendarDate(),
       body.rightEye || null,
       body.leftEye || null,
       toScore(body.rightScore),
@@ -79,7 +80,7 @@ router.put('/:logId', async (req, res) => {
        WHERE id = ?`
     )
     .run(
-      body.logDate || existing.log_date,
+      body.logDate ? normalizeClinicDate(body.logDate) : existing.log_date,
       body.rightEye ?? existing.right_eye,
       body.leftEye ?? existing.left_eye,
       body.rightScore !== undefined ? toScore(body.rightScore) : existing.right_score,

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
+import { clinicCalendarDate, normalizeClinicDate, nowClinic } from '../clinicDate.js';
 
 const router = Router({ mergeParams: true });
 
 function now() {
-  return new Date().toISOString();
+  return nowClinic();
 }
 
 function jsonOrNull(value) {
@@ -111,7 +112,7 @@ router.post('/', async (req, res) => {
     .run(
       req.params.patientId,
       opdAdNo,
-      body.visitDate || ts.slice(0, 10),
+      body.visitDate ? normalizeClinicDate(body.visitDate) : clinicCalendarDate(),
       body.coComplaints || null,
       body.ocOther || null,
       body.familyHistory || null,
@@ -152,7 +153,7 @@ router.put('/:visitId', async (req, res) => {
      WHERE id = ?`
     )
     .run(
-      body.visitDate || existing.visit_date,
+      body.visitDate ? normalizeClinicDate(body.visitDate) : existing.visit_date,
       body.coComplaints ?? existing.co_complaints,
       body.ocOther ?? existing.oc_other,
       body.familyHistory ?? existing.family_history,

@@ -1,17 +1,16 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
+import { normalizeClinicDate, nowClinic } from '../clinicDate.js';
 
 const router = Router({ mergeParams: true });
 
 function now() {
-  return new Date().toISOString();
+  return nowClinic();
 }
 
-/** Prefer client local calendar day; fall back to UTC date. */
-function normalizeDate(raw) {
-  const s = String(raw || '').trim().slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  return new Date().toISOString().slice(0, 10);
+/** Coerce MySQL DATE / string / Date into YYYY-MM-DD for comparisons. */
+function asDateKey(value) {
+  return normalizeClinicDate(value, new Date(0));
 }
 
 router.get('/', async (req, res) => {
@@ -31,14 +30,14 @@ router.get('/', async (req, res) => {
       )
       .all(req.params.patientId);
 
-    const onDate = normalizeDate(req.query.onDate);
-    const visitedOnDate = rows.some((r) => r.visit_date === onDate);
+    const onDate = normalizeClinicDate(req.query.onDate);
+    const visitedOnDate = rows.some((r) => asDateKey(r.visit_date) === onDate);
 
     res.json({
       onDate,
       visitedToday: visitedOnDate,
       dates: rows.map((r) => ({
-        date: r.visit_date,
+        date: asDateKey(r.visit_date),
         createdAt: r.created_at,
         opdAdNo: r.opd_ad_no ?? null,
       })),
@@ -56,10 +55,11 @@ router.put('/', async (req, res) => {
       .get(req.params.patientId);
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
-    const onDate = normalizeDate(req.body?.date || req.body?.onDate);
+    const onDate = normalizeClinicDate(req.body?.date || req.body?.onDate);
     const visited = Boolean(req.body?.visited);
     const ts = now();
     const opdAdNo = await getPatientOpd(req.params.patientId);
+    const patientId = Number(req.params.patientId);
 
     if (visited) {
       await db
@@ -68,14 +68,14 @@ router.put('/', async (req, res) => {
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE opd_ad_no = VALUES(opd_ad_no)`
         )
-        .run(req.params.patientId, opdAdNo, onDate, ts);
+        .run(patientId, opdAdNo, onDate, ts);
       await db
         .prepare('UPDATE patients SET updated_at = ? WHERE id = ?')
-        .run(ts, req.params.patientId);
+        .run(ts, patientId);
     } else {
       await db
         .prepare('DELETE FROM clinic_attendance WHERE patient_id = ? AND visit_date = ?')
-        .run(req.params.patientId, onDate);
+        .run(patientId, onDate);
     }
 
     res.json({

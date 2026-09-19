@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { formNameToId, renameCustomFormId } from '../migrateCustomFormIds.js';
+import { nowClinic } from '../clinicDate.js';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ const FIELD_TYPES = new Set([
 ]);
 
 function now() {
-  return new Date().toISOString();
+  return nowClinic();
 }
 
 function slugify(value) {

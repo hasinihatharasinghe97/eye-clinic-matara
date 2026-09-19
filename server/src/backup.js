@@ -20,6 +20,7 @@ import {
   recordDriveError,
   shouldRunDailyDriveUpload,
 } from './googleDriveBackup.js';
+import { clinicClock, clinicTimestamp, toClinicSortableDate } from './clinicDate.js';
 
 /** How many ZIP backups to keep. Cloud default is lower to save MySQL disk. */
 const KEEP_BACKUPS = Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14;
@@ -28,7 +29,7 @@ const KEEP_BACKUPS = Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 1
 const STALE_HOURS = Number(process.env.BACKUP_STALE_HOURS || 20) || 20;
 
 function stampName() {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+  const stamp = clinicTimestamp().replace(/[:.]/g, '-').slice(0, 19);
   return `EyeClinic-Backup-${stamp}.zip`;
 }
 
@@ -62,7 +63,7 @@ async function collectZipToBuffer() {
   archive.append(
     JSON.stringify(
       {
-        exportedAt: new Date().toISOString(),
+        exportedAt: clinicTimestamp(),
         version: 3,
         patients,
         visits,
@@ -99,7 +100,7 @@ async function collectZipToBuffer() {
       '  5. See docs/HOSTING.md',
       '',
       'Also keep a copy on Google Drive / USB — do not rely only on the server.',
-      `Created: ${new Date().toISOString()}`,
+      `Created: ${clinicTimestamp()}`,
       '',
     ].join('\n'),
     { name: 'README-RESTORE.txt' }
@@ -155,7 +156,7 @@ async function pruneOldBackups() {
 export async function createBackup({ persist = true } = {}) {
   const zipName = stampName();
   const buffer = await collectZipToBuffer();
-  const createdAt = new Date().toISOString();
+  const createdAt = clinicTimestamp();
 
   if (persist) {
     if (IS_CLOUD) {
@@ -207,7 +208,7 @@ export async function listBackups() {
       return {
         id: f,
         zipName: f,
-        createdAt: st.mtime.toISOString(),
+        createdAt: clinicTimestamp(st.mtime),
         size: st.size,
         path: full,
       };
@@ -266,8 +267,7 @@ export function startDailyBackupScheduler() {
     if (backupInFlight) return;
     try {
       const settings = await getSettings();
-      const today = new Date().toISOString().slice(0, 10);
-      const hour = new Date().getHours();
+      const { dateKey: today, hour } = clinicClock();
 
       // Don't auto-backup an empty clinic DB (blocks Render↔HeatWave on first wake).
       const row = await db.prepare('SELECT COUNT(*) AS c FROM patients').get();
@@ -291,11 +291,11 @@ export function startDailyBackupScheduler() {
       }
 
       if (lastAutoDate === today) return;
-      if (settings.lastBackupAt?.startsWith(today)) {
+      if (settings.lastBackupAt && toClinicSortableDate(settings.lastBackupAt) === today) {
         lastAutoDate = today;
         return;
       }
-      // Evening window (local server time) for a second copy on always-on hosts
+      // Evening window (Asia/Colombo) for a second copy on always-on hosts
       if (hour < 18 && hour > 2) return;
 
       backupInFlight = true;

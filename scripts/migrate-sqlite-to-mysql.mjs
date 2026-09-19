@@ -97,6 +97,7 @@ console.log(
 );
 
 const { db } = await import('../server/src/db.js');
+const { clinicTimestamp } = await import('../server/src/clinicDate.js');
 
 const patientMap = new Map();
 console.log('Writing patients…');
@@ -235,7 +236,7 @@ if ((clinic_attendance || []).length) {
         `INSERT IGNORE INTO clinic_attendance (patient_id, visit_date, created_at)
          VALUES (?, ?, ?)`
       )
-      .run(patientId, row.visit_date, row.created_at ?? new Date().toISOString());
+      .run(patientId, row.visit_date, row.created_at ?? clinicTimestamp());
   }
 }
 
@@ -258,8 +259,8 @@ if (custom_disease_forms.length) {
         row.title,
         row.short_title ?? row.title,
         row.fields ?? '[]',
-        row.created_at ?? new Date().toISOString(),
-        row.updated_at ?? new Date().toISOString()
+        row.created_at ?? clinicTimestamp(),
+        row.updated_at ?? clinicTimestamp()
       );
   }
 }

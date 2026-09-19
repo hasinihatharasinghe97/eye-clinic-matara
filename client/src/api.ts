@@ -13,12 +13,16 @@ export function isLoggedIn(): boolean {
   return getToken() === 'local-clinic';
 }
 
-/** Local calendar date YYYY-MM-DD (clinic timezone on the device). */
+/** Local calendar date YYYY-MM-DD in the clinic timezone (Asia/Colombo).
+ *  Storage rule: calendar days = YYYY-MM-DD; timestamps = YYYY-MM-DDTHH:mm:ss+05:30
+ */
 export function localClinicDate(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {

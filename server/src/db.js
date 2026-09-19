@@ -139,6 +139,9 @@ const pool = mysql.createPool({
   connectTimeout: 15_000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 10_000,
+  // Return DATE/DATETIME as strings so calendar days are not shifted by JS Date/UTC
+  dateStrings: true,
+  timezone: '+05:30',
   ssl: mysqlSslOption,
 });
 
