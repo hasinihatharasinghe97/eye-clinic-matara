@@ -9,9 +9,11 @@ import {
 } from './api';
 import { PatientForm } from './pages/PatientForm';
 import { PatientDetail } from './pages/PatientDetail';
+import { VisitForm } from './pages/VisitForm';
 import { BackupPage } from './pages/BackupPage';
 import { DiseaseFormPage } from './diseaseForms/DiseaseFormPage';
 import { StatsPage } from './pages/StatsPage';
+import { DailyReportPage } from './pages/DailyReportPage';
 import { FormBuilderPage } from './pages/FormBuilderPage';
 import { diseaseFormTitle } from './diseaseForms/catalog';
 import { EmptyState, LoadingBlock, PageNav, type Crumb } from './components/PageNav';
@@ -22,15 +24,18 @@ type Route =
   | { name: 'new-patient' }
   | { name: 'edit-patient'; id: string }
   | { name: 'patient'; id: string; tab?: string }
+  | { name: 'new-visit'; patientId: string }
+  | { name: 'edit-visit'; patientId: string; visitId: string }
   | { name: 'new-disease'; patientId: string; formType: string }
   | { name: 'edit-disease'; patientId: string; formType: string; assessmentId: string }
   | { name: 'backup' }
   | { name: 'stats' }
+  | { name: 'daily' }
   | { name: 'forms' };
 
 const TAB_LABELS: Record<string, string> = {
+  visits: 'Visits',
   diseases: 'Assessments',
-  visits: 'Assessments',
   charts: 'Charts',
   progress: 'Progress',
   images: 'Images',
@@ -44,9 +49,11 @@ function parseRoute(): Route {
   if (parts[0] === 'patients' && parts[1] && parts[2] === 'edit') {
     return { name: 'edit-patient', id: parts[1] };
   }
-  if (parts[0] === 'patients' && parts[1] && parts[2] === 'visits') {
-    // Old screening-form URLs redirect to assessments
-    return { name: 'patient', id: parts[1], tab: 'diseases' };
+  if (parts[0] === 'patients' && parts[1] && parts[2] === 'visits' && parts[3] === 'new') {
+    return { name: 'new-visit', patientId: parts[1] };
+  }
+  if (parts[0] === 'patients' && parts[1] && parts[2] === 'visits' && parts[3] && parts[4] === 'edit') {
+    return { name: 'edit-visit', patientId: parts[1], visitId: parts[3] };
   }
   if (
     parts[0] === 'patients' &&
@@ -81,6 +88,7 @@ function parseRoute(): Route {
   }
   if (parts[0] === 'backup') return { name: 'backup' };
   if (parts[0] === 'stats') return { name: 'stats' };
+  if (parts[0] === 'daily') return { name: 'daily' };
   if (parts[0] === 'forms') return { name: 'forms' };
   return { name: 'dashboard' };
 }
@@ -91,7 +99,12 @@ function navigate(to: string) {
 
 function routePatientId(route: Route): string | null {
   if (route.name === 'patient' || route.name === 'edit-patient') return route.id;
-  if (route.name === 'new-disease' || route.name === 'edit-disease') {
+  if (
+    route.name === 'new-visit' ||
+    route.name === 'edit-visit' ||
+    route.name === 'new-disease' ||
+    route.name === 'edit-disease'
+  ) {
     return route.patientId;
   }
   return null;
@@ -119,17 +132,37 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
         backTo: `/patients/${route.id}`,
       };
     case 'patient': {
-      const tab = route.tab === 'visits' ? 'diseases' : route.tab || 'diseases';
-      const tabLabel = TAB_LABELS[tab] || 'Assessments';
+      const tab = route.tab || 'visits';
+      const tabLabel = TAB_LABELS[tab] || 'Visits';
       return {
         crumbs: [
           patients,
-          { label: name, href: `/patients/${route.id}/diseases` },
+          { label: name, href: `/patients/${route.id}/visits` },
           { label: tabLabel },
         ],
         backTo: '/',
       };
     }
+    case 'new-visit':
+      return {
+        crumbs: [
+          patients,
+          { label: name, href: `/patients/${route.patientId}/visits` },
+          { label: 'Visits', href: `/patients/${route.patientId}/visits` },
+          { label: 'New screening form' },
+        ],
+        backTo: `/patients/${route.patientId}/visits`,
+      };
+    case 'edit-visit':
+      return {
+        crumbs: [
+          patients,
+          { label: name, href: `/patients/${route.patientId}/visits` },
+          { label: 'Visits', href: `/patients/${route.patientId}/visits` },
+          { label: 'Edit screening form' },
+        ],
+        backTo: `/patients/${route.patientId}/visits`,
+      };
     case 'new-disease':
       return {
         crumbs: [
@@ -154,6 +187,8 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
       };
     case 'stats':
       return { crumbs: [patients, { label: 'Clinic stats' }], backTo: '/' };
+    case 'daily':
+      return { crumbs: [patients, { label: 'Daily attendance' }], backTo: '/' };
     case 'backup':
       return { crumbs: [patients, { label: 'Backup & Settings' }], backTo: '/' };
     case 'forms':
@@ -372,7 +407,7 @@ function Dashboard() {
               </thead>
               <tbody>
                 {patients.map((p) => (
-                  <tr key={p.id} className="clickable-row" onClick={() => navigate(`/patients/${p.id}/diseases`)}>
+                  <tr key={p.id} className="clickable-row" onClick={() => navigate(`/patients/${p.id}/visits`)}>
                     <td onClick={(e) => e.stopPropagation()}>
                       <VisitTodayTick
                         checked={Boolean(p.visitedToday)}
@@ -383,11 +418,11 @@ function Dashboard() {
                     </td>
                     <td>
                       <a
-                        href={`#/patients/${p.id}/diseases`}
+                        href={`#/patients/${p.id}/visits`}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          navigate(`/patients/${p.id}/diseases`);
+                          navigate(`/patients/${p.id}/visits`);
                         }}
                       >
                         {p.name}
@@ -404,7 +439,7 @@ function Dashboard() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/patients/${p.id}/diseases`);
+                          navigate(`/patients/${p.id}/visits`);
                         }}
                       >
                         Open
@@ -428,7 +463,7 @@ function Dashboard() {
                   <button
                     type="button"
                     className="mobile-list-item"
-                    onClick={() => navigate(`/patients/${p.id}/diseases`)}
+                    onClick={() => navigate(`/patients/${p.id}/visits`)}
                   >
                     <span className="mobile-list-title">{p.name}</span>
                     <span className="mobile-list-meta">
@@ -598,6 +633,17 @@ export default function App() {
             Patients
           </a>
           <a
+            href="#/daily"
+            className={route.name === 'daily' ? 'active' : ''}
+            onClick={(e) => {
+              e.preventDefault();
+              setNavOpen(false);
+              navigate('/daily');
+            }}
+          >
+            Daily report
+          </a>
+          <a
             href="#/stats"
             className={route.name === 'stats' ? 'active' : ''}
             onClick={(e) => {
@@ -649,25 +695,43 @@ export default function App() {
       )}
 
       {route.name === 'dashboard' && <Dashboard />}
+      {route.name === 'daily' && <DailyReportPage />}
       {route.name === 'stats' && <StatsPage />}
       {route.name === 'new-patient' && (
         <PatientForm
-          onDone={(id) => navigate(`/patients/${id}/diseases`)}
+          onDone={(id) => navigate(`/patients/${id}/visits`)}
           onCancel={() => navigate('/')}
         />
       )}
       {route.name === 'edit-patient' && (
         <PatientForm
           patientId={route.id}
-          onDone={(id) => navigate(`/patients/${id}/diseases`)}
-          onCancel={() => navigate(`/patients/${route.id}/diseases`)}
+          onDone={(id) => navigate(`/patients/${id}/visits`)}
+          onCancel={() => navigate(`/patients/${route.id}/visits`)}
         />
       )}
       {route.name === 'patient' && (
         <PatientDetail
           patientId={route.id}
-          tab={route.tab === 'visits' ? 'diseases' : route.tab || 'diseases'}
+          tab={route.tab || 'visits'}
           onNavigate={navigate}
+        />
+      )}
+      {route.name === 'new-visit' && (
+        <VisitForm
+          patientId={route.patientId}
+          patientName={patientName}
+          onDone={() => navigate(`/patients/${route.patientId}/visits`)}
+          onCancel={() => navigate(`/patients/${route.patientId}/visits`)}
+        />
+      )}
+      {route.name === 'edit-visit' && (
+        <VisitForm
+          patientId={route.patientId}
+          visitId={route.visitId}
+          patientName={patientName}
+          onDone={() => navigate(`/patients/${route.patientId}/visits`)}
+          onCancel={() => navigate(`/patients/${route.patientId}/visits`)}
         />
       )}
       {route.name === 'new-disease' && (

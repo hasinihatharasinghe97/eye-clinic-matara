@@ -15,7 +15,10 @@
     "restore:backup": "node scripts/restore-from-backup.mjs",
     "migrate:mysql": "node scripts/migrate-sqlite-to-mysql.mjs",
     "seed:demo": "node scripts/seed-demo-data.mjs",
-    "seed:demo:clear": "node scripts/seed-demo-data.mjs --clear"
+    "seed:demo:clear": "node scripts/seed-demo-data.mjs --clear",
+    "db:local:up": "docker compose up -d",
+    "db:local:down": "docker compose down",
+    "db:local:logs": "docker compose logs -f mysql"
   },
   "dependencies": {
     "archiver": "^7.0.1"

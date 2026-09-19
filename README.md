@@ -12,8 +12,28 @@ Works on the clinic PC and on the internet (**phone + browser**) via **Oracle He
 
 ## Quick start (Windows PC)
 
+### Option A — local MySQL with Docker (easiest for testing)
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+2. Double-click **`start-local-db.bat`** (creates `.env.local` + starts MySQL).
+3. Double-click **`start-clinic.bat`**.
+4. Open **http://localhost:5173** (password from `.env.local`, default `clinic123`).
+
+`.env.local` overrides cloud HeatWave settings in `.env`, so local testing stays separate.
+
+Or from a terminal:
+
+```bat
+copy .env.local.example .env.local
+npm run db:local:up
+npm run install:all
+npm run dev
+```
+
+### Option B — MySQL installed on the PC
+
 1. Install MySQL and create a database (or let the app create `eye_clinic` on first start).
-2. Copy `.env.example` → `.env` and set local MySQL values (or use PowerShell):
+2. Copy `.env.local.example` → `.env.local` and set local MySQL values (or use PowerShell):
 
 ```powershell
 $env:MYSQL_HOST="127.0.0.1"

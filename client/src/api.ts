@@ -181,7 +181,13 @@ export type ChartPoint = {
 export type PatientCharts = {
   metrics: Array<{ key: string; label: string; aliases: string[] }>;
   series: Record<string, ChartPoint[]>;
-  activity: Array<{ month: string; attendance: number; assessments: number; progress: number }>;
+  activity: Array<{
+    month: string;
+    attendance: number;
+    visits: number;
+    assessments: number;
+    progress: number;
+  }>;
   progress: Array<{
     id: string;
     date: string;
@@ -190,7 +196,7 @@ export type PatientCharts = {
     rightScore: number | null;
     leftScore: number | null;
   }>;
-  counts: { attendance: number; assessments: number; progress: number };
+  counts: { attendance: number; visits: number; assessments: number; progress: number };
 };
 
 export type ClinicStats = {
@@ -210,6 +216,27 @@ export type ClinicStats = {
   registrationsByMonth: Array<{ month: string; value: number }>;
   attendanceByMonth: Array<{ month: string; value: number }>;
   assessmentsByMonth: Array<{ month: string; value: number }>;
+};
+
+export type DailyAttendancePatient = {
+  id: string;
+  name: string;
+  age: number | null;
+  gender: string | null;
+  opdAdNo: string | null;
+  address: string | null;
+  phone: string | null;
+  visitDate: string;
+  attendedAt: string | null;
+};
+
+export type DailyAttendanceReport = {
+  fromDate: string;
+  toDate: string;
+  /** Set when fromDate === toDate (single-day query). */
+  onDate: string | null;
+  count: number;
+  patients: DailyAttendancePatient[];
 };
 
 export type Attachment = {
@@ -348,6 +375,13 @@ export const api = {
     >('/api/patients/recent-assessments'),
 
   getStats: () => request<ClinicStats>('/api/stats'),
+
+  getDailyAttendance: (fromDate?: string, toDate?: string) => {
+    const from = fromDate || localClinicDate();
+    const to = toDate || from;
+    const params = new URLSearchParams({ fromDate: from, toDate: to });
+    return request<DailyAttendanceReport>(`/api/stats/daily?${params}`);
+  },
 
   getPatientCharts: (patientId: string) =>
     request<PatientCharts>(`/api/patients/${patientId}/charts`),

@@ -63,9 +63,12 @@ export function StatsPage() {
     <>
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Clinic statistics</h2>
-        <p className="muted" style={{ marginBottom: 0 }}>
+        <p className="muted" style={{ marginBottom: '0.75rem' }}>
           Overall patient load, disease mix, and activity for Nethraloka Ayurvedic Eye Clinic.
         </p>
+        <a className="btn secondary" href="#/daily">
+          Daily attendance report (PDF)
+        </a>
       </div>
 
       <StatKpis

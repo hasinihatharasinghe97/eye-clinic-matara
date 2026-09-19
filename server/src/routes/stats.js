@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { clinicMonthKey } from '../clinicDate.js';
+import { clinicMonthKey, normalizeClinicDate } from '../clinicDate.js';
 import {
   ageBand,
   buildMonthlyActivity,
   extractAssessmentMetrics,
+  extractVisitScreeningMetrics,
   monthKey,
 } from '../analytics.js';
 
@@ -20,6 +21,52 @@ function parseConditions(value) {
     return [];
   }
 }
+
+/** Patients who attended in a date range (Visited today ticks). */
+router.get('/daily', async (req, res) => {
+  try {
+    const single = req.query.onDate ? normalizeClinicDate(req.query.onDate) : null;
+    let fromDate = normalizeClinicDate(req.query.fromDate || single || undefined);
+    let toDate = normalizeClinicDate(req.query.toDate || single || undefined);
+    if (fromDate > toDate) {
+      const tmp = fromDate;
+      fromDate = toDate;
+      toDate = tmp;
+    }
+
+    const rows = await db
+      .prepare(
+        `SELECT p.id, p.name, p.age, p.gender, p.opd_ad_no, p.address, p.phone,
+                a.visit_date, a.created_at AS attended_at
+         FROM clinic_attendance a
+         JOIN patients p ON p.id = a.patient_id
+         WHERE a.visit_date >= ? AND a.visit_date <= ?
+         ORDER BY a.visit_date ASC, p.name ASC`
+      )
+      .all(fromDate, toDate);
+
+    res.json({
+      fromDate,
+      toDate,
+      onDate: fromDate === toDate ? fromDate : null,
+      count: rows.length,
+      patients: rows.map((r) => ({
+        id: String(r.id),
+        name: r.name || '',
+        age: r.age ?? null,
+        gender: r.gender || null,
+        opdAdNo: r.opd_ad_no || null,
+        address: r.address || null,
+        phone: r.phone || null,
+        visitDate: r.visit_date,
+        attendedAt: r.attended_at || null,
+      })),
+    });
+  } catch (err) {
+    console.error('[stats] daily failed:', err);
+    res.status(500).json({ error: err.message || 'Could not load daily attendance' });
+  }
+});
 
 router.get('/', async (_req, res) => {
   try {
@@ -131,6 +178,9 @@ export async function getPatientCharts(patientId) {
   const attendance = await db
     .prepare('SELECT * FROM clinic_attendance WHERE patient_id = ? ORDER BY visit_date ASC')
     .all(patientId);
+  const visits = await db
+    .prepare('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date ASC')
+    .all(patientId);
   const assessments = await db
     .prepare(
       'SELECT * FROM disease_assessments WHERE patient_id = ? ORDER BY assessment_date ASC'
@@ -141,11 +191,26 @@ export async function getPatientCharts(patientId) {
     .all(patientId);
 
   const extracted = extractAssessmentMetrics(assessments);
+  const visitMetrics = extractVisitScreeningMetrics(visits);
+
+  function mergeSeries(a = [], b = []) {
+    return [...a, ...b].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+  }
 
   return {
     metrics: extracted.metrics,
     series: {
       ...extracted.series,
+      iop: mergeSeries(extracted.series.iop, visitMetrics.iopCombined),
+      iopRight: mergeSeries(extracted.series.iopRight, visitMetrics.iopRight),
+      iopLeft: mergeSeries(extracted.series.iopLeft, visitMetrics.iopLeft),
+      visionRight: mergeSeries(extracted.series.visionRight, visitMetrics.visionRight),
+      visionLeft: mergeSeries(extracted.series.visionLeft, visitMetrics.visionLeft),
+      contrastRight: mergeSeries(extracted.series.contrastRight, visitMetrics.contrastRight),
+      contrastLeft: mergeSeries(extracted.series.contrastLeft, visitMetrics.contrastLeft),
+      nearRight: mergeSeries(extracted.series.nearRight, visitMetrics.nearRight),
+      nearLeft: mergeSeries(extracted.series.nearLeft, visitMetrics.nearLeft),
+      colorVision: mergeSeries(extracted.series.colorVision, visitMetrics.colorVision),
       improvementRight: progress
         .filter((p) => p.right_score != null)
         .map((p) => ({
@@ -165,7 +230,7 @@ export async function getPatientCharts(patientId) {
           eye: 'Left',
         })),
     },
-    activity: buildMonthlyActivity({ attendance, assessments, progress }),
+    activity: buildMonthlyActivity({ attendance, visits, assessments, progress }),
     progress: progress.map((p) => ({
       id: p.id,
       date: p.log_date,
@@ -176,6 +241,7 @@ export async function getPatientCharts(patientId) {
     })),
     counts: {
       attendance: attendance.length,
+      visits: visits.length,
       assessments: assessments.length,
       progress: progress.length,
     },

@@ -6,8 +6,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
-/** Load KEY=VALUE pairs from a .env file into process.env. */
-function loadEnvFile(filePath) {
+/** Load KEY=VALUE pairs from a .env file into process.env.
+ * @param {string} filePath
+ * @param {{ override?: boolean }} [opts]  When override=true, replace existing values (for .env.local).
+ */
+function loadEnvFile(filePath, opts = {}) {
   if (!fs.existsSync(filePath)) return false;
   // Strip UTF-8 BOM if Notepad/Windows saved one
   let text = fs.readFileSync(filePath, 'utf8');
@@ -26,8 +29,8 @@ function loadEnvFile(filePath) {
     ) {
       value = value.slice(1, -1);
     }
-    // Prefer .env values over empty shell vars (common on Windows)
-    if (process.env[key] === undefined || process.env[key] === '') {
+    const empty = process.env[key] === undefined || process.env[key] === '';
+    if (opts.override || empty) {
       process.env[key] = value;
       loaded += 1;
     }
@@ -37,9 +40,13 @@ function loadEnvFile(filePath) {
 
 const envPath = path.join(PROJECT_ROOT, '.env');
 const envLocalPath = path.join(PROJECT_ROOT, '.env.local');
-const loadedEnv = loadEnvFile(envPath) || loadEnvFile(envLocalPath);
-if (!loadedEnv && !fs.existsSync(envPath)) {
-  console.warn(`No .env file found at ${envPath}`);
+// Load .env first, then .env.local so local MySQL can override HeatWave settings.
+const loadedBase = loadEnvFile(envPath);
+const loadedLocal = loadEnvFile(envLocalPath, { override: true });
+if (!loadedBase && !loadedLocal && !fs.existsSync(envPath) && !fs.existsSync(envLocalPath)) {
+  console.warn(`No .env or .env.local found at ${PROJECT_ROOT}`);
+} else if (fs.existsSync(envLocalPath)) {
+  console.log('[db] Using .env.local overrides (local database)');
 }
 
 const defaultDataDir = path.resolve(PROJECT_ROOT, 'data');
