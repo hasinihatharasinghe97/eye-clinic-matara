@@ -122,12 +122,16 @@ export function PatientChartsPanel({ patientId }: Props) {
     () => pairSeries(data?.series.improvementRight, data?.series.improvementLeft),
     [data]
   );
+  const colorCompare = useMemo(
+    () => pairSeries(data?.series.colorVisionRight, data?.series.colorVisionLeft),
+    [data]
+  );
   const colorPoints = useMemo(() => {
     if (!data) return [];
     return (data.series.colorVision || []).map((p) => ({
       date: p.date,
       value: p.value,
-      label: p.source,
+      label: p.eye || p.source,
     }));
   }, [data]);
 
@@ -180,12 +184,16 @@ export function PatientChartsPanel({ patientId }: Props) {
 
         <ChartCard
           title="Color vision"
-          subtitle="Color vision score from screening visits / follow-ups"
-          empty={colorPoints.length === 0}
-          emptyText="Set color vision on Visits or assessment follow-ups to see this chart."
+          subtitle="Color vision score (1–30) — Right vs Left from Visits"
+          empty={colorCompare.length === 0 && colorPoints.length === 0}
+          emptyText="Set R and L color vision on Visits screening forms to see this chart."
         >
           <div className="chart-frame">
-            <MetricLineChart data={colorPoints} />
+            {colorCompare.length > 0 ? (
+              <MonthLineChart series={colorCompare} />
+            ) : (
+              <MetricLineChart data={colorPoints} />
+            )}
           </div>
         </ChartCard>
 

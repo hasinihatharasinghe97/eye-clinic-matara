@@ -77,6 +77,22 @@ function parseIop(raw: Visit['iop']): { r: string; l: string } {
   return { r: String(raw), l: '' };
 }
 
+function parseColorVision(raw: Visit['colorVision']): { r: string; l: string } {
+  if (!raw) return { r: '', l: '' };
+  if (typeof raw === 'object') {
+    return { r: String(raw.r ?? ''), l: String(raw.l ?? '') };
+  }
+  try {
+    const parsed = JSON.parse(raw) as { r?: string; l?: string };
+    if (parsed && typeof parsed === 'object' && ('r' in parsed || 'l' in parsed)) {
+      return { r: String(parsed.r ?? ''), l: String(parsed.l ?? '') };
+    }
+  } catch {
+    /* legacy single score */
+  }
+  return { r: String(raw), l: '' };
+}
+
 type FormState = {
   visitDate: string;
   coComplaints: string;
@@ -90,7 +106,7 @@ type FormState = {
   ixHistory: string;
   diagnosis: string;
   iop: { r: string; l: string };
-  colorVision: string;
+  colorVision: { r: string; l: string };
   visualField: VisualFieldData;
   notes: string;
 };
@@ -108,7 +124,7 @@ const blank = (): FormState => ({
   ixHistory: '',
   diagnosis: '',
   iop: { r: '', l: '' },
-  colorVision: '',
+  colorVision: { r: '', l: '' },
   visualField: emptyVisualField(),
   notes: '',
 });
@@ -166,7 +182,7 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
         ixHistory: v.ixHistory || '',
         diagnosis: v.diagnosis || '',
         iop: parseIop(v.iop),
-        colorVision: v.colorVision || '',
+        colorVision: parseColorVision(v.colorVision),
         visualField: parseVisualField(v.visualField),
         notes: v.notes || '',
       });
@@ -181,6 +197,7 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
       const payload = {
         ...form,
         iop: JSON.stringify(form.iop),
+        colorVision: JSON.stringify(form.colorVision),
         visualField: JSON.stringify(form.visualField),
       };
       if (visitId) await api.updateVisit(patientId, visitId, payload);
@@ -336,12 +353,19 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
         onChange={(visualField) => setForm((f) => ({ ...f, visualField }))}
       />
 
-      <div className="grid-2" style={{ marginTop: '0.75rem' }}>
+      <h3 className="section-title">Color vision</h3>
+      <div className="grid-2">
         <SelectField
-          label="Color vision"
-          value={form.colorVision}
+          label="R-Eye (1-30)"
+          value={form.colorVision.r}
           options={COLOR_VISION_OPTIONS}
-          onChange={(colorVision) => setForm((f) => ({ ...f, colorVision }))}
+          onChange={(r) => setForm((f) => ({ ...f, colorVision: { ...f.colorVision, r } }))}
+        />
+        <SelectField
+          label="L-Eye (1-30)"
+          value={form.colorVision.l}
+          options={COLOR_VISION_OPTIONS}
+          onChange={(l) => setForm((f) => ({ ...f, colorVision: { ...f.colorVision, l } }))}
         />
       </div>
 

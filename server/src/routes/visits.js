@@ -46,6 +46,22 @@ function parseIop(raw) {
   return { r: String(raw), l: '' };
 }
 
+function parseColorVision(raw) {
+  if (raw == null || raw === '') return { r: '', l: '' };
+  if (typeof raw === 'object') {
+    return { r: String(raw.r ?? ''), l: String(raw.l ?? '') };
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && ('r' in parsed || 'l' in parsed)) {
+      return { r: String(parsed.r ?? ''), l: String(parsed.l ?? '') };
+    }
+  } catch {
+    /* legacy single score */
+  }
+  return { r: String(raw), l: '' };
+}
+
 function mapVisit(row) {
   if (!row) return null;
   return {
@@ -64,7 +80,7 @@ function mapVisit(row) {
     ixHistory: row.ix_history,
     diagnosis: row.diagnosis,
     iop: parseIop(row.iop),
-    colorVision: row.color_vision,
+    colorVision: parseColorVision(row.color_vision),
     visualField: row.visual_field,
     notes: row.notes,
     createdAt: row.created_at,
@@ -124,7 +140,7 @@ router.post('/', async (req, res) => {
       body.ixHistory || null,
       body.diagnosis || null,
       asStoredText(body.iop),
-      body.colorVision || null,
+      asStoredText(body.colorVision),
       asStoredText(body.visualField),
       body.notes || null,
       ts,
@@ -165,7 +181,7 @@ router.put('/:visitId', async (req, res) => {
       body.ixHistory ?? existing.ix_history,
       body.diagnosis ?? existing.diagnosis,
       body.iop !== undefined ? asStoredText(body.iop) : existing.iop,
-      body.colorVision ?? existing.color_vision,
+      body.colorVision !== undefined ? asStoredText(body.colorVision) : existing.color_vision,
       body.visualField !== undefined ? asStoredText(body.visualField) : existing.visual_field,
       body.notes ?? existing.notes,
       ts,

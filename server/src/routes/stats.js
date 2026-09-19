@@ -211,6 +211,8 @@ export async function getPatientCharts(patientId) {
       nearRight: mergeSeries(extracted.series.nearRight, visitMetrics.nearRight),
       nearLeft: mergeSeries(extracted.series.nearLeft, visitMetrics.nearLeft),
       colorVision: mergeSeries(extracted.series.colorVision, visitMetrics.colorVision),
+      colorVisionRight: mergeSeries(extracted.series.colorVisionRight, visitMetrics.colorVisionRight),
+      colorVisionLeft: mergeSeries(extracted.series.colorVisionLeft, visitMetrics.colorVisionLeft),
       improvementRight: progress
         .filter((p) => p.right_score != null)
         .map((p) => ({

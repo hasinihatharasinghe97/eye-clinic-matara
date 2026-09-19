@@ -87,6 +87,8 @@ const METRIC_KEYS = [
   { key: 'contrastRight', label: 'Contrast improvement R', aliases: [] },
   { key: 'contrastLeft', label: 'Contrast improvement L', aliases: [] },
   { key: 'colorVision', label: 'Color vision', aliases: ['colorVision'] },
+  { key: 'colorVisionRight', label: 'Color vision R', aliases: [] },
+  { key: 'colorVisionLeft', label: 'Color vision L', aliases: [] },
   { key: 'nearRight', label: 'Near vision R', aliases: [] },
   { key: 'nearLeft', label: 'Near vision L', aliases: [] },
   { key: 'csgs', label: 'CSGS score', aliases: ['csgs', 'csgsTotal'] },
@@ -195,6 +197,8 @@ export function extractVisitScreeningMetrics(visits) {
   const nearRight = [];
   const nearLeft = [];
   const colorVision = [];
+  const colorVisionRight = [];
+  const colorVisionLeft = [];
   const iopRight = [];
   const iopLeft = [];
   const iopCombined = [];
@@ -223,9 +227,34 @@ export function extractVisitScreeningMetrics(visits) {
     if (nr != null) pushPoint(nearRight, { date, value: nr, eye: 'Right', source: 'visit', kind: 'visit' });
     if (nl != null) pushPoint(nearLeft, { date, value: nl, eye: 'Left', source: 'visit', kind: 'visit' });
 
-    const color = toNumber(v.color_vision ?? v.colorVision);
-    if (color != null) {
-      pushPoint(colorVision, { date, value: color, source: 'visit', kind: 'visit' });
+    const colorRaw = v.color_vision ?? v.colorVision;
+    let colorR = null;
+    let colorL = null;
+    if (colorRaw != null && colorRaw !== '') {
+      if (typeof colorRaw === 'object') {
+        colorR = toNumber(colorRaw.r);
+        colorL = toNumber(colorRaw.l);
+      } else {
+        try {
+          const parsed = JSON.parse(colorRaw);
+          if (parsed && typeof parsed === 'object' && ('r' in parsed || 'l' in parsed)) {
+            colorR = toNumber(parsed.r);
+            colorL = toNumber(parsed.l);
+          } else {
+            colorR = toNumber(colorRaw);
+          }
+        } catch {
+          colorR = toNumber(colorRaw);
+        }
+      }
+    }
+    if (colorR != null) {
+      pushPoint(colorVisionRight, { date, value: colorR, eye: 'Right', source: 'visit', kind: 'visit' });
+      pushPoint(colorVision, { date, value: colorR, eye: 'Right', source: 'visit', kind: 'visit' });
+    }
+    if (colorL != null) {
+      pushPoint(colorVisionLeft, { date, value: colorL, eye: 'Left', source: 'visit', kind: 'visit' });
+      pushPoint(colorVision, { date, value: colorL, eye: 'Left', source: 'visit', kind: 'visit' });
     }
 
     const iop = parseVisitIop(v.iop);
@@ -250,6 +279,8 @@ export function extractVisitScreeningMetrics(visits) {
     nearRight: sortPts(nearRight),
     nearLeft: sortPts(nearLeft),
     colorVision: sortPts(colorVision),
+    colorVisionRight: sortPts(colorVisionRight),
+    colorVisionLeft: sortPts(colorVisionLeft),
     iopRight: sortPts(iopRight),
     iopLeft: sortPts(iopLeft),
     iopCombined: sortPts(iopCombined),

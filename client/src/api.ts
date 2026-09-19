@@ -151,7 +151,8 @@ export type Visit = {
   diagnosis: string | null;
   /** Structured R/L IOP, or legacy single string */
   iop: IopData | string | null;
-  colorVision: string | null;
+  /** Structured R/L color vision scores, or legacy single string */
+  colorVision: IopData | string | null;
   /** JSON VisualFieldData or legacy free-text */
   visualField: string | VisualFieldData | null;
   notes: string | null;
