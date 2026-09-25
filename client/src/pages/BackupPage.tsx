@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type SystemSettings, type BackupInfo } from '../api';
+import { useToast } from '../components/Toast';
 
 function formatSize(n?: number) {
   if (n == null) return '';
@@ -9,12 +10,11 @@ function formatSize(n?: number) {
 }
 
 export function BackupPage() {
+  const toast = useToast();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [backupFolder, setBackupFolder] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [backups, setBackups] = useState<BackupInfo[]>([]);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
@@ -25,14 +25,14 @@ export function BackupPage() {
   }
 
   useEffect(() => {
-    refresh().catch((err) => setError(err.message));
-  }, []);
+    refresh().catch((err) =>
+      toast.error(err instanceof Error ? err.message : 'Failed to load backup settings')
+    );
+  }, [toast]);
 
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
-    setMessage('');
     try {
       const body: { backupFolder?: string; clinicPassword?: string } = {};
       if (!settings?.cloudMode) body.backupFolder = backupFolder;
@@ -41,9 +41,9 @@ export function BackupPage() {
       setSettings(s);
       setBackupFolder(s.backupFolder);
       setNewPassword('');
-      setMessage('Settings saved.');
+      toast.success('Settings saved.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save settings');
+      toast.error(err instanceof Error ? err.message : 'Could not save settings');
     } finally {
       setBusy(false);
     }
@@ -51,21 +51,19 @@ export function BackupPage() {
 
   async function runBackup() {
     setBusy(true);
-    setError('');
-    setMessage('');
     try {
       if (!settings?.cloudMode && backupFolder !== settings?.backupFolder) {
         await api.updateSettings({ backupFolder });
       }
       const result = await api.backup();
       await refresh();
-      setMessage(
+      toast.success(
         settings?.cloudMode
           ? `Backup created: ${result.zipName} (${formatSize(result.size)}). It is stored in Oracle HeatWave. Download a copy below, or use Upload to Google Drive.`
           : `Backup created: ${result.zipName} (${formatSize(result.size)}). Download it below and copy to Google Drive / USB.`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Backup failed');
+      toast.error(err instanceof Error ? err.message : 'Backup failed');
     } finally {
       setBusy(false);
     }
@@ -73,16 +71,14 @@ export function BackupPage() {
 
   async function runDriveUpload() {
     setBusy(true);
-    setError('');
-    setMessage('');
     try {
       const result = await api.uploadBackupToDrive();
       await refresh();
-      setMessage(
+      toast.success(
         `Uploaded ${result.zipName} to Google Drive only (not stored again in HeatWave). Previous daily Drive backup was removed.`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google Drive upload failed');
+      toast.error(err instanceof Error ? err.message : 'Google Drive upload failed');
     } finally {
       setBusy(false);
     }
@@ -246,8 +242,6 @@ BACKUP_CRON_SECRET=long-random-secret`}
             </li>
           </ol>
         )}
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
       </div>
 
       <div className="card">
@@ -384,9 +378,6 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
             placeholder="At least 4 characters"
           />
         </div>
-
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
 
         <button className="btn secondary" type="submit" disabled={busy} style={{ marginTop: '0.75rem' }}>
           Save settings

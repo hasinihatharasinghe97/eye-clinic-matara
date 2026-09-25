@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Patient } from '../api';
 import { openWhatsAppChat, toWhatsAppNumber } from '../whatsapp';
+import { useToast } from './Toast';
+import { useConfirm } from './ConfirmDialog';
 
 const MEDICINE_MAX = 200;
 
@@ -17,11 +19,11 @@ function sortedUnique(nums: number[]): number[] {
 }
 
 export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const [phone, setPhone] = useState(patient.phone || '');
   const [medicineNo, setMedicineNo] = useState<number | ''>('');
   const [sent, setSent] = useState<number[]>(() => sortedUnique(patient.medicinesSent || []));
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [savingGrid, setSavingGrid] = useState(false);
 
@@ -29,8 +31,6 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
     setPhone(patient.phone || '');
     setSent(sortedUnique(patient.medicinesSent || []));
     setMedicineNo('');
-    setStatus('');
-    setError('');
   }, [patient.id, patient.phone, patient.medicinesSent]);
 
   const waNumber = toWhatsAppNumber(phone);
@@ -52,31 +52,34 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
   }
 
   async function setMarked(n: number, marked: boolean) {
-    setError('');
     const next = marked ? [...sent, n] : sent.filter((x) => x !== n);
     try {
       await persistSent(next);
-      setStatus(marked ? `Marked medicine #${n} as sent.` : `Cleared mark for medicine #${n}.`);
+      toast.success(
+        marked ? `Marked medicine #${n} as sent.` : `Cleared mark for medicine #${n}.`
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update medicine marks');
+      toast.error(err instanceof Error ? err.message : 'Could not update medicine marks');
     }
   }
 
   async function openChatAndMarkSent() {
-    setError('');
-    setStatus('');
     if (!waNumber) {
-      setError('Enter a valid WhatsApp number (e.g. 0771234567).');
+      toast.error('Enter a valid WhatsApp number (e.g. 0771234567).');
       return;
     }
     if (medicineNo === '') {
-      setError('Tap the medicine number (1–200) you will send, then open WhatsApp.');
+      toast.error('Tap the medicine number (1–200) you will send, then open WhatsApp.');
       return;
     }
     if (alreadySent) {
-      const ok = window.confirm(
-        `Medicine #${medicineNo} was already marked as sent. Open WhatsApp again anyway?`
-      );
+      const ok = await confirm({
+        title: 'Already marked sent',
+        message: `Medicine #${medicineNo} was already marked as sent. Open WhatsApp again anyway?`,
+        confirmLabel: 'Open anyway',
+        cancelLabel: 'Cancel',
+        danger: false,
+      });
       if (!ok) return;
     }
 
@@ -85,11 +88,11 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
       // Open this patient's chat (no pre-filled message). Attach the PDF inside WhatsApp.
       openWhatsAppChat(waNumber, '');
       await persistSent([...sent, medicineNo]);
-      setStatus(
+      toast.success(
         `WhatsApp opened for +${waNumber}. Attach medicine PDF #${medicineNo} in the chat (paperclip). That number is marked as sent.`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open WhatsApp');
+      toast.error(err instanceof Error ? err.message : 'Could not open WhatsApp');
     } finally {
       setSending(false);
     }
@@ -151,9 +154,6 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
           )}
         </div>
       </div>
-
-      {error && <p className="error">{error}</p>}
-      {status && <p className="success">{status}</p>}
 
       <div className="row" style={{ marginTop: '0.85rem', flexWrap: 'wrap' }}>
         <button

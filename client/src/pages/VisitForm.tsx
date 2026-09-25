@@ -11,6 +11,7 @@ import {
   type VisualFieldData,
 } from '../api';
 import { emptyVisualField, VisualFieldMarker } from '../components/VisualFieldMarker';
+import { useToast } from '../components/Toast';
 
 type Props = {
   patientId: string;
@@ -158,8 +159,8 @@ function SelectField({
 }
 
 export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }: Props) {
+  const toast = useToast();
   const [form, setForm] = useState<FormState>(blank);
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -186,13 +187,14 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
         visualField: parseVisualField(v.visualField),
         notes: v.notes || '',
       });
-    }).catch((err) => setError(err.message));
-  }, [patientId, visitId]);
+    }).catch((err) =>
+      toast.error(err instanceof Error ? err.message : 'Failed to load visit')
+    );
+  }, [patientId, visitId, toast]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
     try {
       const payload = {
         ...form,
@@ -204,7 +206,7 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
       else await api.createVisit(patientId, payload);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setBusy(false);
     }
@@ -613,7 +615,6 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
         </div>
       </div>
 
-      {error && <p className="error">{error}</p>}
       <div className="form-actions">
         <button className="btn" type="submit" disabled={busy}>
           {busy ? 'Saving...' : 'Save visit'}

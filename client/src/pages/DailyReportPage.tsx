@@ -7,6 +7,7 @@ import {
   type DailyAttendancePatient,
 } from '../api';
 import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { useToast } from '../components/Toast';
 
 type SortKey = 'visitDate' | 'name' | 'age' | 'opdAdNo' | 'address';
 type SortDir = 'asc' | 'desc';
@@ -121,6 +122,7 @@ function downloadDailyPdf(fromDate: string, toDate: string, rows: DailyAttendanc
 }
 
 export function DailyReportPage() {
+  const toast = useToast();
   const today = localClinicDate();
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
@@ -128,7 +130,7 @@ export function DailyReportPage() {
   const [sortKey, setSortKey] = useState<SortKey>('visitDate');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
 
   const rangeFrom = fromDate <= toDate ? fromDate : toDate;
@@ -143,12 +145,13 @@ export function DailyReportPage() {
       .then((report) => {
         if (cancelled) return;
         setRows(report.patients);
-        setError('');
+        setLoadFailed(false);
       })
       .catch((err) => {
         if (cancelled) return;
         setRows([]);
-        setError(err instanceof Error ? err.message : 'Failed to load attendance');
+        setLoadFailed(true);
+        toast.error(err instanceof Error ? err.message : 'Failed to load attendance');
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -156,7 +159,7 @@ export function DailyReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [rangeFrom, rangeTo]);
+  }, [rangeFrom, rangeTo, toast]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDir)),
@@ -176,7 +179,7 @@ export function DailyReportPage() {
     try {
       downloadDailyPdf(rangeFrom, rangeTo, sorted);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create PDF');
+      toast.error(err instanceof Error ? err.message : 'Could not create PDF');
     } finally {
       setPdfBusy(false);
     }
@@ -235,14 +238,13 @@ export function DailyReportPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="card">
-          <p className="error">{error}</p>
-        </div>
-      )}
-
       {busy ? (
         <LoadingBlock label="Loading attendance…" />
+      ) : loadFailed ? (
+        <EmptyState
+          title="Could not load attendance"
+          hint="Check your connection and try changing the date range."
+        />
       ) : rows.length === 0 ? (
         <EmptyState
           title="No visits in this range"

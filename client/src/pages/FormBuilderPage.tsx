@@ -4,6 +4,8 @@ import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
 import { BUILTIN_DISEASE_FORMS } from '../diseaseForms/catalog';
 import type { FormField } from '../diseaseForms/types';
 import { LoadingBlock } from '../components/PageNav';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const MAX_QUESTIONS = 15;
 
@@ -159,6 +161,8 @@ function fieldsToQuestions(fields: FormField[]): Question[] {
 }
 
 export function FormBuilderPage({ onNavigate }: Props) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const { customForms, ready, reload } = useDiseaseForms();
   const [mode, setMode] = useState<'list' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,8 +170,6 @@ export function FormBuilderPage({ onNavigate }: Props) {
   const [questions, setQuestions] = useState<Question[]>([blankQuestion('text')]);
   const [trackIop, setTrackIop] = useState(true);
   const [trackCmt, setTrackCmt] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   const isNew = mode === 'edit' && !editingId;
@@ -179,8 +181,6 @@ export function FormBuilderPage({ onNavigate }: Props) {
     setQuestions([blankQuestion('text')]);
     setTrackIop(true);
     setTrackCmt(false);
-    setError('');
-    setMessage('');
     setMode('edit');
   }
 
@@ -203,8 +203,6 @@ export function FormBuilderPage({ onNavigate }: Props) {
         })
         .slice(0, MAX_QUESTIONS)
     );
-    setError('');
-    setMessage('');
     setMode('edit');
   }
 
@@ -229,8 +227,6 @@ export function FormBuilderPage({ onNavigate }: Props) {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
-    setMessage('');
     try {
       const title = name.trim();
       if (!title) throw new Error('Enter the disease name');
@@ -243,16 +239,16 @@ export function FormBuilderPage({ onNavigate }: Props) {
         const updated = await api.updateCustomDiseaseForm(editingId, payload);
         setEditingId(updated.id);
         setName(updated.shortTitle || updated.title);
-        setMessage('Saved.');
+        toast.success('Saved.');
       } else {
         const created = await api.createCustomDiseaseForm(payload);
         setEditingId(created.id);
         setName(created.shortTitle || created.title);
-        setMessage('Form created. Select it on a patient to start using it.');
+        toast.success('Form created. Select it on a patient to start using it.');
       }
       await reload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save form');
+      toast.error(err instanceof Error ? err.message : 'Could not save form');
     } finally {
       setBusy(false);
     }
@@ -261,22 +257,34 @@ export function FormBuilderPage({ onNavigate }: Props) {
   async function remove(id: string, force = false) {
     const form = customForms.find((f) => f.id === id);
     if (!form) return;
-    if (!force && !confirm(`Delete “${form.shortTitle}”?`)) return;
+    if (!force) {
+      const ok = await confirm({
+        title: 'Delete form?',
+        message: `Delete “${form.shortTitle}”?`,
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
-    setError('');
     try {
       await api.deleteCustomDiseaseForm(id, force);
       await reload();
-      setMessage(`Deleted “${form.shortTitle}”.`);
+      toast.success(`Deleted “${form.shortTitle}”.`);
       if (editingId === id) setMode('list');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not delete form';
       if (/assessment/i.test(msg)) {
-        const ok = confirm(`${msg}\n\nDelete the form anyway?`);
+        const ok = await confirm({
+          title: 'Delete anyway?',
+          message: `${msg}\n\nDelete the form anyway?`,
+          confirmLabel: 'Delete anyway',
+          danger: true,
+        });
         if (ok) await remove(id, true);
-        else setError(msg);
+        else toast.error(msg);
       } else {
-        setError(msg);
+        toast.error(msg);
       }
     } finally {
       setBusy(false);
@@ -424,9 +432,6 @@ export function FormBuilderPage({ onNavigate }: Props) {
           </label>
         </div>
 
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
-
         <div className="form-actions">
           <button className="btn" type="submit" disabled={busy}>
             {busy ? 'Saving…' : isNew ? 'Create form' : 'Save'}
@@ -463,8 +468,6 @@ export function FormBuilderPage({ onNavigate }: Props) {
             New disease form
           </button>
         </div>
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
       </div>
 
       <div className="card">

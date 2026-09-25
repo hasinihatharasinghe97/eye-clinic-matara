@@ -4,6 +4,7 @@ import { useDiseaseForm } from './DiseaseFormsContext';
 import { FormFields } from './FormFields';
 import { nowDate, toDateValue } from './helpers';
 import type { FormDataMap } from './types';
+import { useToast } from '../components/Toast';
 
 type Props = {
   patientId: string;
@@ -22,12 +23,12 @@ export function DiseaseFormPage({
   onDone,
   onCancel,
 }: Props) {
+  const toast = useToast();
   const def = useDiseaseForm(formType);
   const [assessmentDate, setAssessmentDate] = useState(nowDate);
   const [eye, setEye] = useState('Both');
   const [notes, setNotes] = useState('');
   const [data, setData] = useState<FormDataMap>({});
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -40,13 +41,15 @@ export function DiseaseFormPage({
         setNotes(a.notes || '');
         setData(a.data || {});
       })
-      .catch((err) => setError(err.message));
-  }, [patientId, assessmentId]);
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : 'Failed to load assessment')
+      );
+  }, [patientId, assessmentId, toast]);
 
   if (!def) {
     return (
       <div className="card">
-        <p className="error">Unknown disease form.</p>
+        <p className="muted">Unknown disease form.</p>
         <button className="btn secondary" type="button" onClick={onCancel}>
           Back
         </button>
@@ -57,7 +60,6 @@ export function DiseaseFormPage({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
     try {
       const payload = {
         formType,
@@ -73,7 +75,7 @@ export function DiseaseFormPage({
       }
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setBusy(false);
     }
@@ -120,8 +122,6 @@ export function DiseaseFormPage({
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
       </div>
-
-      {error && <p className="error">{error}</p>}
 
       <div className="form-actions">
         <button className="btn" type="submit" disabled={busy}>

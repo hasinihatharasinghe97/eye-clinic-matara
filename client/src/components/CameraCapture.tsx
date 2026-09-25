@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useToast } from './Toast';
 
 type Props = {
   open: boolean;
@@ -8,9 +9,10 @@ type Props = {
 };
 
 export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
+  const toast = useToast();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [error, setError] = useState('');
+  const [cameraBlocked, setCameraBlocked] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -30,11 +32,19 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
     setBlob(null);
   }, []);
 
+  const failCamera = useCallback(
+    (message: string) => {
+      setCameraBlocked(true);
+      toast.error(message);
+    },
+    [toast]
+  );
+
   useEffect(() => {
     if (!open) {
       stopCamera();
       clearPreview();
-      setError('');
+      setCameraBlocked(false);
       return;
     }
 
@@ -43,11 +53,11 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
     let cancelled = false;
 
     async function start() {
-      setError('');
+      setCameraBlocked(false);
       try {
         stopCamera();
         if (!navigator.mediaDevices?.getUserMedia) {
-          setError(
+          failCamera(
             'Camera is not supported in this browser. Use Upload instead, or try Chrome / Edge.'
           );
           return;
@@ -73,12 +83,12 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
       } catch (err) {
         const name = err instanceof DOMException ? err.name : '';
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-          setError('Camera permission denied. Allow camera access in the browser, then try again.');
+          failCamera('Camera permission denied. Allow camera access in the browser, then try again.');
         } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-          setError('No camera was found on this device.');
+          failCamera('No camera was found on this device.');
         } else {
           const msg = err instanceof Error ? err.message : 'Could not open camera';
-          setError(`Could not open camera: ${msg}`);
+          failCamera(`Could not open camera: ${msg}`);
         }
       }
     }
@@ -89,12 +99,12 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
       cancelled = true;
       stopCamera();
     };
-  }, [open, facingMode, session, previewUrl, stopCamera, clearPreview]);
+  }, [open, facingMode, session, previewUrl, stopCamera, clearPreview, failCamera]);
 
   function takePhoto() {
     const video = videoRef.current;
     if (!video || !video.videoWidth) {
-      setError('Camera is not ready yet. Wait a moment and try again.');
+      failCamera('Camera is not ready yet. Wait a moment and try again.');
       return;
     }
     const maxEdge = 1600;
@@ -108,14 +118,14 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
     canvas.toBlob(
       (next) => {
         if (!next) {
-          setError('Could not capture photo.');
+          failCamera('Could not capture photo.');
           return;
         }
         clearPreview();
         setBlob(next);
         setPreviewUrl(URL.createObjectURL(next));
         stopCamera();
-        setError('');
+        setCameraBlocked(false);
       },
       'image/jpeg',
       0.72
@@ -159,8 +169,6 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
           </button>
         </div>
 
-        {error && <p className="error">{error}</p>}
-
         <div className="camera-viewport">
           {previewUrl ? (
             <img src={previewUrl} alt="Captured preview" className="camera-preview" />
@@ -175,7 +183,7 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
               <button
                 className="btn secondary"
                 type="button"
-                disabled={busy || Boolean(error && !streamRef.current)}
+                disabled={busy || Boolean(cameraBlocked && !streamRef.current)}
                 onClick={() => setFacingMode((m) => (m === 'environment' ? 'user' : 'environment'))}
               >
                 Flip camera
@@ -183,7 +191,7 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
               <button
                 className="btn"
                 type="button"
-                disabled={busy || Boolean(error)}
+                disabled={busy || cameraBlocked}
                 onClick={takePhoto}
               >
                 Capture

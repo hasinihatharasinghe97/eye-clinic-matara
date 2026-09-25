@@ -8,15 +8,17 @@ import {
   SimplePieChart,
   StatKpis,
 } from '../charts/ChartWidgets';
-import { LoadingBlock } from '../components/PageNav';
+import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { useToast } from '../components/Toast';
 
 function labelCondition(id: string) {
   return diseaseFormTitle(id);
 }
 
 export function StatsPage() {
+  const toast = useToast();
   const [stats, setStats] = useState<ClinicStats | null>(null);
-  const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(true);
 
   useEffect(() => {
@@ -25,11 +27,14 @@ export function StatsPage() {
       .getStats()
       .then((s) => {
         setStats(s);
-        setError('');
+        setLoadFailed(false);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load stats'))
+      .catch((err) => {
+        setLoadFailed(true);
+        toast.error(err instanceof Error ? err.message : 'Failed to load stats');
+      })
       .finally(() => setBusy(false));
-  }, []);
+  }, [toast]);
 
   const trend = useMemo(() => {
     if (!stats) return [];
@@ -50,11 +55,12 @@ export function StatsPage() {
   }, [stats]);
 
   if (busy) return <LoadingBlock label="Loading clinic stats…" />;
-  if (error) {
+  if (loadFailed) {
     return (
-      <div className="card">
-        <p className="error">{error}</p>
-      </div>
+      <EmptyState
+        title="Could not load clinic statistics"
+        hint="Check your connection and refresh the page."
+      />
     );
   }
   if (!stats) return null;

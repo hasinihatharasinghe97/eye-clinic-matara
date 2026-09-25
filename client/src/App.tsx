@@ -18,6 +18,8 @@ import { FormBuilderPage } from './pages/FormBuilderPage';
 import { diseaseFormTitle } from './diseaseForms/catalog';
 import { EmptyState, LoadingBlock, PageNav, type Crumb } from './components/PageNav';
 import { VisitTodayTick } from './components/VisitTodayTick';
+import { PAGE_SIZE_OPTIONS, Pagination } from './components/Pagination';
+import { useToast } from './components/Toast';
 
 type Route =
   | { name: 'dashboard' }
@@ -199,20 +201,19 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
 }
 
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const toast = useToast();
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
     try {
       const res = await api.login(password);
       setToken(res.token);
       onLogin();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      toast.error(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setBusy(false);
     }
@@ -234,7 +235,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             required
           />
         </div>
-        {error && <p className="error">{error}</p>}
         <button className="btn" type="submit" disabled={busy} style={{ marginTop: '0.85rem', width: '100%' }}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
@@ -244,8 +244,13 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 }
 
 function Dashboard() {
+  const toast = useToast();
   const [q, setQ] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [total, setTotal] = useState(0);
+  const [visitedToday, setVisitedToday] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
   const [recent, setRecent] = useState<
     Array<{
       assessment_id: string;
@@ -258,7 +263,6 @@ function Dashboard() {
     }>
   >([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const today = localClinicDate();
@@ -269,18 +273,23 @@ function Dashboard() {
     const t = setTimeout(async () => {
       try {
         const [list, assessments, s] = await Promise.all([
-          api.listPatients(q, today),
+          api.listPatients(q, today, page, pageSize),
           api.recentAssessments(),
           api.getSettings(),
         ]);
         if (!cancelled) {
-          setPatients(list);
+          if (list.total > 0 && list.patients.length === 0 && page > 1) {
+            setPage(1);
+            return;
+          }
+          setPatients(list.patients);
+          setTotal(list.total);
+          setVisitedToday(list.visitedToday);
           setRecent(assessments);
           setSettings(s);
-          setError('');
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
+        if (!cancelled) toast.error(err instanceof Error ? err.message : 'Failed to load');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -289,24 +298,22 @@ function Dashboard() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [q, today]);
+  }, [q, today, page, pageSize, toast]);
 
   async function toggleVisited(patientId: string, visited: boolean) {
     setTogglingId(patientId);
-    setError('');
     try {
       await api.setAttendance(patientId, visited, today);
       setPatients((prev) =>
         prev.map((p) => (p.id === patientId ? { ...p, visitedToday: visited } : p))
       );
+      setVisitedToday((c) => Math.max(0, c + (visited ? 1 : -1)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update visit mark');
+      toast.error(err instanceof Error ? err.message : 'Could not update visit mark');
     } finally {
       setTogglingId(null);
     }
   }
-
-  const visitedCount = patients.filter((p) => p.visitedToday).length;
 
   const backupStale = useMemo(() => {
     if (!settings) return false;
@@ -339,9 +346,9 @@ function Dashboard() {
             {loading
               ? 'Loading…'
               : q
-                ? `${patients.length} match${patients.length === 1 ? '' : 'es'}`
-                : `${patients.length} patient${patients.length === 1 ? '' : 's'}${
-                    visitedCount ? ` · ${visitedCount} visited today` : ''
+                ? `${total} match${total === 1 ? '' : 'es'}`
+                : `${total} patient${total === 1 ? '' : 's'}${
+                    visitedToday ? ` · ${visitedToday} visited today` : ''
                   }`}
           </p>
         </div>
@@ -359,7 +366,10 @@ function Dashboard() {
         <input
           placeholder="Search name, OPD no, phone, or ID…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(1);
+          }}
           autoFocus
           aria-label="Search patients"
         />
@@ -367,15 +377,16 @@ function Dashboard() {
           <button
             type="button"
             className="search-clear"
-            onClick={() => setQ('')}
+            onClick={() => {
+              setQ('');
+              setPage(1);
+            }}
             aria-label="Clear search"
           >
             Clear
           </button>
         )}
       </div>
-
-      {error && <p className="error">{error}</p>}
 
       <div className="card">
         {loading ? (
@@ -389,7 +400,14 @@ function Dashboard() {
                 : 'Register the first patient to start recording disease assessments.'
             }
             actionLabel={q ? 'Clear search' : 'New patient'}
-            onAction={() => (q ? setQ('') : navigate('/patients/new'))}
+            onAction={() => {
+              if (q) {
+                setQ('');
+                setPage(1);
+              } else {
+                navigate('/patients/new');
+              }
+            }}
           />
         ) : (
           <>
@@ -475,6 +493,17 @@ function Dashboard() {
               </li>
             ))}
           </ul>
+          <Pagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            disabled={loading}
+            onPageChange={setPage}
+            onPageSizeChange={(n) => {
+              setPageSize(n as (typeof PAGE_SIZE_OPTIONS)[number]);
+              setPage(1);
+            }}
+          />
           </>
         )}
       </div>

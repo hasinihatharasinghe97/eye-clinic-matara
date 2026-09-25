@@ -336,11 +336,19 @@ export const api = {
 
   backupDownloadUrl: (id: string) => `/api/system/backups/${encodeURIComponent(id)}/download`,
 
-  listPatients: (q = '', onDate?: string) => {
+  listPatients: (q = '', onDate?: string, page = 1, pageSize = 10) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     params.set('onDate', onDate || localClinicDate());
-    return request<Patient[]>(`/api/patients?${params}`);
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    return request<{
+      patients: Patient[];
+      total: number;
+      page: number;
+      pageSize: number;
+      visitedToday: number;
+    }>(`/api/patients?${params}`);
   },
 
   setAttendance: (patientId: string, visited: boolean, onDate?: string) =>

@@ -7,6 +7,8 @@ import {
   MonthLineChart,
   StatKpis,
 } from '../charts/ChartWidgets';
+import { EmptyState } from '../components/PageNav';
+import { useToast } from '../components/Toast';
 
 type Props = {
   patientId: string;
@@ -50,8 +52,9 @@ function pairSeries(
 }
 
 export function PatientChartsPanel({ patientId }: Props) {
+  const toast = useToast();
   const [data, setData] = useState<PatientCharts | null>(null);
-  const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(true);
   const [metric, setMetric] = useState('visionRight');
 
@@ -61,7 +64,7 @@ export function PatientChartsPanel({ patientId }: Props) {
       .getPatientCharts(patientId)
       .then((d) => {
         setData(d);
-        setError('');
+        setLoadFailed(false);
         const preferred = [
           'visionRight',
           'visionLeft',
@@ -79,9 +82,12 @@ export function PatientChartsPanel({ patientId }: Props) {
         const first = preferred.find((k) => (d.series[k] || []).length > 0);
         if (first) setMetric(first);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load charts'))
+      .catch((err) => {
+        setLoadFailed(true);
+        toast.error(err instanceof Error ? err.message : 'Failed to load charts');
+      })
       .finally(() => setBusy(false));
-  }, [patientId]);
+  }, [patientId, toast]);
 
   const metricOptions = useMemo(() => {
     if (!data) return [];
@@ -136,7 +142,14 @@ export function PatientChartsPanel({ patientId }: Props) {
   }, [data]);
 
   if (busy) return <p className="muted">Loading improvement charts…</p>;
-  if (error) return <p className="error">{error}</p>;
+  if (loadFailed) {
+    return (
+      <EmptyState
+        title="Could not load charts"
+        hint="Check your connection and open this tab again."
+      />
+    );
+  }
   if (!data) return null;
 
   return (

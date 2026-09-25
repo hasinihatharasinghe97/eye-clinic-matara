@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, localClinicDate, type Patient } from '../api';
 import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
+import { useToast } from '../components/Toast';
 
 type Props = {
   patientId?: string;
@@ -25,29 +26,32 @@ function emptyForm() {
 }
 
 export function PatientForm({ patientId, onDone, onCancel }: Props) {
+  const toast = useToast();
   const { forms: DISEASE_FORMS } = useDiseaseForms();
   const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const editing = Boolean(patientId);
 
   useEffect(() => {
     if (!patientId) return;
-    api.getPatient(patientId).then((p) => {
-      setForm({
-        name: p.name,
-        age: p.age,
-        gender: p.gender || '',
-        registrationDate: p.registrationDate || '',
-        opdAdNo: p.opdAdNo || '',
-        occupation: p.occupation || '',
-        idNumber: p.idNumber || '',
-        address: p.address || '',
-        phone: p.phone || '',
-        conditions: p.conditions || [],
-      });
-    }).catch((err) => setError(err.message));
-  }, [patientId]);
+    api
+      .getPatient(patientId)
+      .then((p) => {
+        setForm({
+          name: p.name,
+          age: p.age,
+          gender: p.gender || '',
+          registrationDate: p.registrationDate || '',
+          opdAdNo: p.opdAdNo || '',
+          occupation: p.occupation || '',
+          idNumber: p.idNumber || '',
+          address: p.address || '',
+          phone: p.phone || '',
+          conditions: p.conditions || [],
+        });
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Failed to load patient'));
+  }, [patientId, toast]);
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -68,20 +72,28 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError('');
     try {
+      const opdAdNo = String(form.opdAdNo || '').trim();
+      if (!opdAdNo) {
+        toast.error('OPD AD NO is required');
+        setBusy(false);
+        return;
+      }
       const payload = {
         ...form,
         age: form.age == null || Number.isNaN(Number(form.age)) ? null : Number(form.age),
         name: form.name.trim(),
+        opdAdNo,
         conditions: form.conditions || [],
       };
-      const saved = editing && patientId
-        ? await api.updatePatient(patientId, payload)
-        : await api.createPatient(payload);
+      const saved =
+        editing && patientId
+          ? await api.updatePatient(patientId, payload)
+          : await api.createPatient(payload);
+      toast.success(editing ? 'Patient updated.' : 'Patient registered.');
       onDone(saved.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setBusy(false);
     }
@@ -91,7 +103,9 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
     <form className="card" onSubmit={submit}>
       <h2>{editing ? 'Edit patient' : 'New patient'}</h2>
       <p className="muted" style={{ marginTop: '-0.35rem' }}>
-        {editing ? 'Update registration details and monitored conditions.' : 'Register a new clinic patient.'}
+        {editing
+          ? 'Update registration details and monitored conditions.'
+          : 'Register a new clinic patient.'}
       </p>
       <div className="grid-2">
         <div className="field wide">
@@ -130,11 +144,12 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
           />
         </div>
         <div className="field">
-          <label>OPD AD NO</label>
+          <label>OPD AD NO *</label>
           <input
             value={form.opdAdNo || ''}
             onChange={(e) => set('opdAdNo', e.target.value)}
             placeholder="e.g. OPD-1024"
+            required
           />
         </div>
         <div className="field">
@@ -173,7 +188,8 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
 
       <h3 className="section-title">Disease forms to monitor</h3>
       <p className="muted">
-        Select the conditions this patient needs. Matching monitoring forms will appear under Disease forms.
+        Select the conditions this patient needs. Matching monitoring forms will appear under Disease
+        forms.
       </p>
       <div className="check-grid">
         {DISEASE_FORMS.map((f) => (
@@ -188,7 +204,6 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
         ))}
       </div>
 
-      {error && <p className="error">{error}</p>}
       <div className="form-actions">
         <button className="btn" type="submit" disabled={busy}>
           {busy ? 'Saving…' : 'Save patient'}

@@ -14,6 +14,8 @@ import { PatientChartsPanel } from './PatientCharts';
 import { CameraCapture } from '../components/CameraCapture';
 import { SendMedicineWhatsApp } from '../components/SendMedicineWhatsApp';
 import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import { VisitTodayTick } from '../components/VisitTodayTick';
 
 function formatWhen(value: string) {
@@ -46,13 +48,15 @@ type Props = {
 };
 
 export function PatientDetail({ patientId, tab, onNavigate }: Props) {
+  const toast = useToast();
+  const { confirm } = useConfirm();
   const { forms: DISEASE_FORMS } = useDiseaseForms();
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [files, setFiles] = useState<Attachment[]>([]);
   const [assessments, setAssessments] = useState<DiseaseAssessment[]>([]);
-  const [error, setError] = useState('');
   const [logForm, setLogForm] = useState({
     logDate: localClinicDate(),
     rightEye: '',
@@ -88,21 +92,21 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       setLogs(l);
       setFiles(a);
       setAssessments(d);
-      setError('');
+      setLoadFailed(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load patient');
+      setLoadFailed(true);
+      toast.error(err instanceof Error ? err.message : 'Failed to load patient');
     }
-  }, [patientId, today]);
+  }, [patientId, today, toast]);
 
   async function toggleVisitedToday(next: boolean) {
     setTogglingVisit(true);
-    setError('');
     try {
       await api.setAttendance(patientId, next, today);
       setVisitedToday(next);
       setPatient((p) => (p ? { ...p, visitedToday: next } : p));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update visit mark');
+      toast.error(err instanceof Error ? err.message : 'Could not update visit mark');
     } finally {
       setTogglingVisit(false);
     }
@@ -149,19 +153,18 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       });
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save progress');
+      toast.error(err instanceof Error ? err.message : 'Could not save progress');
     }
   }
 
   async function uploadFile(file: File) {
     setUploading(true);
-    setError('');
     try {
       const created = await api.uploadAttachment(patientId, file);
       setFiles((prev) => [created, ...prev]);
       setCameraOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -174,15 +177,15 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
     e.target.value = '';
   }
 
-  if (!patient && !error) return <LoadingBlock label="Loading patient…" />;
+  if (!patient && !loadFailed) return <LoadingBlock label="Loading patient…" />;
   if (!patient) {
     return (
-      <div className="card">
-        <p className="error">{error}</p>
-        <button className="btn secondary" type="button" onClick={() => onNavigate('/')}>
-          ← Back to patients
-        </button>
-      </div>
+      <EmptyState
+        title="Could not load this patient"
+        hint="Check your connection or try again from the patients list."
+        actionLabel="← Back to patients"
+        onAction={() => onNavigate('/')}
+      />
     );
   }
 
@@ -251,9 +254,20 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               className="btn danger"
               type="button"
               onClick={async () => {
-                if (!confirm(`Delete patient ${patient.name}? This cannot be undone.`)) return;
-                await api.deletePatient(patientId);
-                onNavigate('/');
+                const ok = await confirm({
+                  title: 'Delete patient?',
+                  message: `Delete patient ${patient.name}? This cannot be undone.`,
+                  confirmLabel: 'Delete',
+                  danger: true,
+                });
+                if (!ok) return;
+                try {
+                  await api.deletePatient(patientId);
+                  toast.success(`Patient “${patient.name}” deleted.`);
+                  onNavigate('/');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Could not delete patient');
+                }
               }}
             >
               Delete
@@ -261,8 +275,6 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
           </div>
         </div>
       </div>
-
-      {error && <p className="error">{error}</p>}
 
       <div className="tabs">
         <button
@@ -366,9 +378,22 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                           className="btn danger"
                           type="button"
                           onClick={async () => {
-                            if (!confirm('Delete this visit?')) return;
-                            await api.deleteVisit(patientId, v.id);
-                            await load();
+                            const ok = await confirm({
+                              title: 'Delete visit?',
+                              message: 'Delete this visit? This cannot be undone.',
+                              confirmLabel: 'Delete',
+                              danger: true,
+                            });
+                            if (!ok) return;
+                            try {
+                              await api.deleteVisit(patientId, v.id);
+                              toast.success('Visit deleted.');
+                              await load();
+                            } catch (err) {
+                              toast.error(
+                                err instanceof Error ? err.message : 'Could not delete visit'
+                              );
+                            }
                           }}
                         >
                           Delete
@@ -500,9 +525,24 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                             className="btn danger"
                             type="button"
                             onClick={async () => {
-                              if (!confirm('Delete this assessment?')) return;
-                              await api.deleteDiseaseAssessment(patientId, a.id);
-                              await load();
+                              const ok = await confirm({
+                                title: 'Delete assessment?',
+                                message: 'Delete this assessment? This cannot be undone.',
+                                confirmLabel: 'Delete',
+                                danger: true,
+                              });
+                              if (!ok) return;
+                              try {
+                                await api.deleteDiseaseAssessment(patientId, a.id);
+                                toast.success('Assessment deleted.');
+                                await load();
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error
+                                    ? err.message
+                                    : 'Could not delete assessment'
+                                );
+                              }
                             }}
                           >
                             Delete
@@ -611,9 +651,24 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                             className="btn danger"
                             type="button"
                             onClick={async () => {
-                              if (!confirm('Delete this progress entry?')) return;
-                              await api.deleteProgress(patientId, log.id);
-                              await load();
+                              const ok = await confirm({
+                                title: 'Delete progress entry?',
+                                message: 'Delete this progress entry? This cannot be undone.',
+                                confirmLabel: 'Delete',
+                                danger: true,
+                              });
+                              if (!ok) return;
+                              try {
+                                await api.deleteProgress(patientId, log.id);
+                                toast.success('Progress entry deleted.');
+                                await load();
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error
+                                    ? err.message
+                                    : 'Could not delete progress entry'
+                                );
+                              }
                             }}
                           >
                             Delete
@@ -692,9 +747,22 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                       type="button"
                       style={{ marginTop: '0.35rem' }}
                       onClick={async () => {
-                        if (!confirm('Delete this file?')) return;
-                        await api.deleteAttachment(patientId, f.id);
-                        await load();
+                        const ok = await confirm({
+                          title: 'Delete file?',
+                          message: 'Delete this file? This cannot be undone.',
+                          confirmLabel: 'Delete',
+                          danger: true,
+                        });
+                        if (!ok) return;
+                        try {
+                          await api.deleteAttachment(patientId, f.id);
+                          toast.success('File deleted.');
+                          await load();
+                        } catch (err) {
+                          toast.error(
+                            err instanceof Error ? err.message : 'Could not delete file'
+                          );
+                        }
                       }}
                     >
                       Delete

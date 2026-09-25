@@ -64,13 +64,29 @@ function mapPatient(row, visitedToday = false) {
   };
 }
 
+const PAGE_SIZES = new Set([10, 25, 50, 100]);
+
 router.get('/', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     const onDate = normalizeClinicDate(req.query.onDate);
+    const pageSizeRaw = Number(req.query.pageSize);
+    const pageSize = PAGE_SIZES.has(pageSizeRaw) ? pageSizeRaw : 10;
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+    const offset = (page - 1) * pageSize;
+
+    let total;
     let rows;
     if (q) {
       const like = `%${q}%`;
+      const countRow = await db
+        .prepare(
+          `SELECT COUNT(*) AS total
+           FROM patients p
+           WHERE p.name LIKE ? OR p.opd_ad_no LIKE ? OR p.phone LIKE ? OR p.id_number LIKE ?`
+        )
+        .get(like, like, like, like);
+      total = Number(countRow?.total || 0);
       rows = await db
         .prepare(
           `SELECT p.*,
@@ -80,10 +96,12 @@ router.get('/', async (req, res) => {
              ON a.patient_id = p.id AND a.visit_date = ?
            WHERE p.name LIKE ? OR p.opd_ad_no LIKE ? OR p.phone LIKE ? OR p.id_number LIKE ?
            ORDER BY visited_today DESC, p.updated_at DESC
-           LIMIT 200`
+           LIMIT ${pageSize} OFFSET ${offset}`
         )
         .all(onDate, like, like, like, like);
     } else {
+      const countRow = await db.prepare('SELECT COUNT(*) AS total FROM patients').get();
+      total = Number(countRow?.total || 0);
       rows = await db
         .prepare(
           `SELECT p.*,
@@ -92,11 +110,22 @@ router.get('/', async (req, res) => {
            LEFT JOIN clinic_attendance a
              ON a.patient_id = p.id AND a.visit_date = ?
            ORDER BY visited_today DESC, p.updated_at DESC
-           LIMIT 200`
+           LIMIT ${pageSize} OFFSET ${offset}`
         )
         .all(onDate);
     }
-    res.json(rows.map((r) => mapPatient(r, r.visited_today)));
+
+    const visitedRow = await db
+      .prepare('SELECT COUNT(*) AS c FROM clinic_attendance WHERE visit_date = ?')
+      .get(onDate);
+
+    res.json({
+      patients: rows.map((r) => mapPatient(r, r.visited_today)),
+      total,
+      page,
+      pageSize,
+      visitedToday: Number(visitedRow?.c || 0),
+    });
   } catch (err) {
     console.error('[patients] list failed:', err);
     res.status(500).json({ error: err.message || 'Could not load patients' });
@@ -146,6 +175,16 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const body = req.body || {};
   if (!body.name?.trim()) return res.status(400).json({ error: 'Name is required' });
+  const opdAdNo = String(body.opdAdNo || '').trim();
+  if (!opdAdNo) return res.status(400).json({ error: 'OPD AD NO is required' });
+  const duplicate = await db
+    .prepare('SELECT id, name FROM patients WHERE LOWER(opd_ad_no) = LOWER(?) LIMIT 1')
+    .get(opdAdNo);
+  if (duplicate) {
+    return res.status(400).json({
+      error: `A patient with "${opdAdNo}" OPD NO is already registered`,
+    });
+  }
   const ts = now();
   const conditions = Array.isArray(body.conditions) ? body.conditions : [];
   const result = await db
@@ -160,7 +199,7 @@ router.post('/', async (req, res) => {
       body.age ?? null,
       body.gender || null,
       body.registrationDate ? normalizeClinicDate(body.registrationDate) : clinicCalendarDate(),
-      body.opdAdNo || null,
+      opdAdNo,
       body.occupation || null,
       body.idNumber || null,
       body.address || null,
@@ -178,6 +217,18 @@ router.put('/:id', async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Patient not found' });
   const body = req.body || {};
   if (!body.name?.trim()) return res.status(400).json({ error: 'Name is required' });
+  const opdAdNo = String(body.opdAdNo || '').trim();
+  if (!opdAdNo) return res.status(400).json({ error: 'OPD AD NO is required' });
+  const duplicate = await db
+    .prepare(
+      'SELECT id, name FROM patients WHERE LOWER(opd_ad_no) = LOWER(?) AND id <> ? LIMIT 1'
+    )
+    .get(opdAdNo, req.params.id);
+  if (duplicate) {
+    return res.status(400).json({
+      error: `A patient with "${opdAdNo}" OPD NO is already registered`,
+    });
+  }
   const ts = now();
   const conditions = Array.isArray(body.conditions)
     ? body.conditions
@@ -196,7 +247,7 @@ router.put('/:id', async (req, res) => {
       body.registrationDate
         ? normalizeClinicDate(body.registrationDate)
         : existing.registration_date,
-      body.opdAdNo || null,
+      opdAdNo,
       body.occupation || null,
       body.idNumber || null,
       body.address || null,
@@ -205,7 +256,7 @@ router.put('/:id', async (req, res) => {
       ts,
       req.params.id
     );
-  await syncOpdToRelatedTables(req.params.id, body.opdAdNo || null);
+  await syncOpdToRelatedTables(req.params.id, opdAdNo);
   const row = await db.prepare('SELECT * FROM patients WHERE id = ?').get(req.params.id);
   res.json(mapPatient(row));
 });
