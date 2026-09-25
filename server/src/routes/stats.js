@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { clinicMonthKey, normalizeClinicDate } from '../clinicDate.js';
+import { clinicMonthKey, normalizeClinicDate, toClinicSortableDate } from '../clinicDate.js';
 import {
   ageBand,
   buildMonthlyActivity,
@@ -8,6 +8,7 @@ import {
   extractVisitScreeningMetrics,
   monthKey,
 } from '../analytics.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 
 const router = Router();
 
@@ -22,6 +23,37 @@ function parseConditions(value) {
   }
 }
 
+/** Optional from/to for stats. Empty = all time (no truncation). */
+function parseOptionalStatsRange(query = {}) {
+  const rawFrom = String(query.fromDate || '').trim();
+  const rawTo = String(query.toDate || '').trim();
+  if (!rawFrom && !rawTo) return { fromDate: null, toDate: null };
+  let fromDate = rawFrom ? normalizeClinicDate(rawFrom) : null;
+  let toDate = rawTo ? normalizeClinicDate(rawTo) : null;
+  if (fromDate && toDate && fromDate > toDate) {
+    const tmp = fromDate;
+    fromDate = toDate;
+    toDate = tmp;
+  }
+  return { fromDate, toDate };
+}
+
+function dayInRange(day, fromDate, toDate) {
+  if (!fromDate && !toDate) return true;
+  if (!day) return false;
+  if (fromDate && day < fromDate) return false;
+  if (toDate && day > toDate) return false;
+  return true;
+}
+
+const DAILY_SORT = {
+  visitDate: 'a.visit_date',
+  name: 'p.name',
+  age: 'p.age',
+  opdAdNo: 'p.opd_ad_no',
+  address: 'p.address',
+};
+
 /** Patients who attended in a date range (Visited today ticks). */
 router.get('/daily', async (req, res) => {
   try {
@@ -34,6 +66,21 @@ router.get('/daily', async (req, res) => {
       toDate = tmp;
     }
 
+    const { page, pageSize, offset } = parsePagination(req.query);
+    const sortKey = DAILY_SORT[String(req.query.sortKey || '')] ? String(req.query.sortKey) : 'visitDate';
+    const sortDir = String(req.query.sortDir || '').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    const sortCol = DAILY_SORT[sortKey];
+
+    const countRow = await db
+      .prepare(
+        `SELECT COUNT(*) AS total
+         FROM clinic_attendance a
+         JOIN patients p ON p.id = a.patient_id
+         WHERE a.visit_date >= ? AND a.visit_date <= ?`
+      )
+      .get(fromDate, toDate);
+    const total = Number(countRow?.total || 0);
+
     const rows = await db
       .prepare(
         `SELECT p.id, p.name, p.age, p.gender, p.opd_ad_no, p.address, p.phone,
@@ -41,7 +88,8 @@ router.get('/daily', async (req, res) => {
          FROM clinic_attendance a
          JOIN patients p ON p.id = a.patient_id
          WHERE a.visit_date >= ? AND a.visit_date <= ?
-         ORDER BY a.visit_date ASC, p.name ASC`
+         ORDER BY ${sortCol} ${sortDir}, a.visit_date ASC, p.name ASC
+         LIMIT ${pageSize} OFFSET ${offset}`
       )
       .all(fromDate, toDate);
 
@@ -49,7 +97,7 @@ router.get('/daily', async (req, res) => {
       fromDate,
       toDate,
       onDate: fromDate === toDate ? fromDate : null,
-      count: rows.length,
+      count: total,
       patients: rows.map((r) => ({
         id: String(r.id),
         name: r.name || '',
@@ -61,6 +109,9 @@ router.get('/daily', async (req, res) => {
         visitDate: r.visit_date,
         attendedAt: r.attended_at || null,
       })),
+      ...paginationMeta(page, pageSize, total),
+      sortKey,
+      sortDir: sortDir === 'DESC' ? 'desc' : 'asc',
     });
   } catch (err) {
     console.error('[stats] daily failed:', err);
@@ -68,8 +119,9 @@ router.get('/daily', async (req, res) => {
   }
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
+    const { fromDate, toDate } = parseOptionalStatsRange(req.query);
     const patients = await db.prepare('SELECT * FROM patients').all();
     const attendance = await db.prepare('SELECT * FROM clinic_attendance').all();
     const progress = await db.prepare('SELECT * FROM progress_logs').all();
@@ -81,8 +133,16 @@ router.get('/', async (_req, res) => {
     const ageBands = {};
     const conditionCounts = {};
     const registrationsByMonth = {};
+    let patientsInScope = 0;
+    let patientsWithConditions = 0;
 
     for (const p of patients) {
+      const regDay =
+        toClinicSortableDate(p.registration_date) || toClinicSortableDate(p.created_at);
+      if (!dayInRange(regDay, fromDate, toDate)) continue;
+
+      patientsInScope += 1;
+
       const g = String(p.gender || '').toUpperCase();
       if (g === 'M' || g === 'MALE') genderCounts.M += 1;
       else if (g === 'F' || g === 'FEMALE') genderCounts.F += 1;
@@ -91,20 +151,25 @@ router.get('/', async (_req, res) => {
       const band = ageBand(p.age);
       ageBands[band] = (ageBands[band] || 0) + 1;
 
-      for (const c of parseConditions(p.conditions)) {
+      const conditions = parseConditions(p.conditions);
+      if (conditions.length > 0) patientsWithConditions += 1;
+      for (const c of conditions) {
         conditionCounts[c] = (conditionCounts[c] || 0) + 1;
       }
 
-      const regMonth =
-        monthKey(p.registration_date) || monthKey(p.created_at) || null;
+      const regMonth = monthKey(p.registration_date) || monthKey(p.created_at) || null;
       if (regMonth) {
         registrationsByMonth[regMonth] = (registrationsByMonth[regMonth] || 0) + 1;
       }
     }
 
     const attendanceByMonth = {};
+    let attendanceDays = 0;
     let attendanceThisMonth = 0;
     for (const row of attendance) {
+      const day = toClinicSortableDate(row.visit_date);
+      if (!dayInRange(day, fromDate, toDate)) continue;
+      attendanceDays += 1;
       const m = monthKey(row.visit_date);
       if (m) {
         attendanceByMonth[m] = (attendanceByMonth[m] || 0) + 1;
@@ -112,10 +177,21 @@ router.get('/', async (_req, res) => {
       }
     }
 
+    let progressLogs = 0;
+    for (const row of progress) {
+      const day = toClinicSortableDate(row.log_date) || toClinicSortableDate(row.created_at);
+      if (!dayInRange(day, fromDate, toDate)) continue;
+      progressLogs += 1;
+    }
+
     const assessmentsByType = {};
     const assessmentsByMonth = {};
+    let assessmentCount = 0;
     let assessmentsThisMonth = 0;
     for (const a of assessments) {
+      const day = toClinicSortableDate(a.assessment_date) || toClinicSortableDate(a.created_at);
+      if (!dayInRange(day, fromDate, toDate)) continue;
+      assessmentCount += 1;
       assessmentsByType[a.form_type] = (assessmentsByType[a.form_type] || 0) + 1;
       const m = monthKey(a.assessment_date);
       if (m) {
@@ -134,21 +210,17 @@ router.get('/', async (_req, res) => {
         .map(([month, value]) => ({ month, value }))
         .sort((a, b) => (a.month < b.month ? -1 : 1));
 
-    const last12 = (series) => {
-      if (series.length <= 12) return series;
-      return series.slice(-12);
-    };
-
     res.json({
+      fromDate,
+      toDate,
       totals: {
-        patients: patients.length,
-        attendanceDays: attendance.length,
-        progressLogs: progress.length,
-        assessments: assessments.length,
+        patients: patientsInScope,
+        attendanceDays,
+        progressLogs,
+        assessments: assessmentCount,
         attendanceThisMonth,
         assessmentsThisMonth,
-        patientsWithConditions: patients.filter((p) => parseConditions(p.conditions).length > 0)
-          .length,
+        patientsWithConditions,
       },
       gender: [
         { name: 'Male', value: genderCounts.M },
@@ -160,9 +232,9 @@ router.get('/', async (_req, res) => {
         .map((name) => ({ name, value: ageBands[name] })),
       conditions: toPairs(conditionCounts),
       assessmentsByType: toPairs(assessmentsByType),
-      registrationsByMonth: last12(monthSeries(registrationsByMonth)),
-      attendanceByMonth: last12(monthSeries(attendanceByMonth)),
-      assessmentsByMonth: last12(monthSeries(assessmentsByMonth)),
+      registrationsByMonth: monthSeries(registrationsByMonth),
+      attendanceByMonth: monthSeries(attendanceByMonth),
+      assessmentsByMonth: monthSeries(assessmentsByMonth),
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Could not load stats' });

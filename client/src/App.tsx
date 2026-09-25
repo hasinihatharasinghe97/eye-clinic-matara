@@ -262,6 +262,12 @@ function Dashboard() {
       opd_ad_no: string | null;
     }>
   >([]);
+  const [recentTotal, setRecentTotal] = useState(0);
+  const [recentPage, setRecentPage] = useState(1);
+  const [recentPageSize, setRecentPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(
+    PAGE_SIZE_OPTIONS[0]
+  );
+  const [recentLoading, setRecentLoading] = useState(true);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -272,9 +278,8 @@ function Dashboard() {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const [list, assessments, s] = await Promise.all([
+        const [list, s] = await Promise.all([
           api.listPatients(q, today, page, pageSize),
-          api.recentAssessments(),
           api.getSettings(),
         ]);
         if (!cancelled) {
@@ -285,7 +290,6 @@ function Dashboard() {
           setPatients(list.patients);
           setTotal(list.total);
           setVisitedToday(list.visitedToday);
-          setRecent(assessments);
           setSettings(s);
         }
       } catch (err) {
@@ -299,6 +303,31 @@ function Dashboard() {
       clearTimeout(t);
     };
   }, [q, today, page, pageSize, toast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRecentLoading(true);
+    api
+      .recentAssessments(recentPage, recentPageSize)
+      .then((list) => {
+        if (cancelled) return;
+        if (list.total > 0 && list.assessments.length === 0 && recentPage > 1) {
+          setRecentPage(1);
+          return;
+        }
+        setRecent(list.assessments);
+        setRecentTotal(list.total);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(err instanceof Error ? err.message : 'Failed to load recent assessments');
+      })
+      .finally(() => {
+        if (!cancelled) setRecentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [recentPage, recentPageSize, toast]);
 
   async function toggleVisited(patientId: string, visited: boolean) {
     setTogglingId(patientId);
@@ -510,7 +539,7 @@ function Dashboard() {
 
       <div className="card">
         <h3>Recent assessments</h3>
-        {loading ? (
+        {recentLoading ? (
           <LoadingBlock label="Loading recent assessments…" />
         ) : recent.length === 0 ? (
           <EmptyState
@@ -573,6 +602,17 @@ function Dashboard() {
               </li>
             ))}
           </ul>
+          <Pagination
+            total={recentTotal}
+            page={recentPage}
+            pageSize={recentPageSize}
+            disabled={recentLoading}
+            onPageChange={setRecentPage}
+            onPageSizeChange={(n) => {
+              setRecentPageSize(n as (typeof PAGE_SIZE_OPTIONS)[number]);
+              setRecentPage(1);
+            }}
+          />
           </>
         )}
       </div>

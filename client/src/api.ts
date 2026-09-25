@@ -201,6 +201,8 @@ export type PatientCharts = {
 };
 
 export type ClinicStats = {
+  fromDate: string | null;
+  toDate: string | null;
   totals: {
     patients: number;
     attendanceDays: number;
@@ -238,6 +240,27 @@ export type DailyAttendanceReport = {
   onDate: string | null;
   count: number;
   patients: DailyAttendancePatient[];
+  total: number;
+  page: number;
+  pageSize: number;
+  sortKey?: string;
+  sortDir?: 'asc' | 'desc';
+};
+
+export type PaginatedMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type RecentAssessment = {
+  assessment_id: string;
+  assessment_date: string;
+  form_type: string;
+  eye: string | null;
+  patient_id: string;
+  patient_name: string;
+  opd_ad_no: string | null;
 };
 
 export type Attachment = {
@@ -361,34 +384,56 @@ export const api = {
       }
     ),
 
-  getAttendance: (patientId: string, onDate?: string) => {
+  getAttendance: (patientId: string, onDate?: string, page = 1, pageSize = 10) => {
     const date = onDate || localClinicDate();
+    const params = new URLSearchParams({
+      onDate: date,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
     return request<{
       onDate: string;
       visitedToday: boolean;
-      dates: Array<{ date: string; createdAt: string }>;
-    }>(`/api/patients/${patientId}/attendance?onDate=${encodeURIComponent(date)}`);
+      dates: Array<{ date: string; createdAt: string; opdAdNo?: string | null }>;
+    } & PaginatedMeta>(`/api/patients/${patientId}/attendance?${params}`);
   },
 
-  recentAssessments: () =>
-    request<
-      Array<{
-        assessment_id: string;
-        assessment_date: string;
-        form_type: string;
-        eye: string | null;
-        patient_id: string;
-        patient_name: string;
-        opd_ad_no: string | null;
-      }>
-    >('/api/patients/recent-assessments'),
+  recentAssessments: (page = 1, pageSize = 10) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return request<{ assessments: RecentAssessment[] } & PaginatedMeta>(
+      `/api/patients/recent-assessments?${params}`
+    );
+  },
 
-  getStats: () => request<ClinicStats>('/api/stats'),
+  getStats: (fromDate?: string, toDate?: string) => {
+    const params = new URLSearchParams();
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    const q = params.toString();
+    return request<ClinicStats>(q ? `/api/stats?${q}` : '/api/stats');
+  },
 
-  getDailyAttendance: (fromDate?: string, toDate?: string) => {
+  getDailyAttendance: (
+    fromDate?: string,
+    toDate?: string,
+    page = 1,
+    pageSize = 10,
+    sortKey = 'visitDate',
+    sortDir: 'asc' | 'desc' = 'asc'
+  ) => {
     const from = fromDate || localClinicDate();
     const to = toDate || from;
-    const params = new URLSearchParams({ fromDate: from, toDate: to });
+    const params = new URLSearchParams({
+      fromDate: from,
+      toDate: to,
+      page: String(page),
+      pageSize: String(pageSize),
+      sortKey,
+      sortDir,
+    });
     return request<DailyAttendanceReport>(`/api/stats/daily?${params}`);
   },
 
@@ -424,7 +469,12 @@ export const api = {
   deletePatient: (id: string) =>
     request<{ ok: boolean }>(`/api/patients/${id}`, { method: 'DELETE' }),
 
-  listVisits: (patientId: string) => request<Visit[]>(`/api/patients/${patientId}/visits`),
+  listVisits: (patientId: string, page = 1, pageSize = 10) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return request<{ visits: Visit[] } & PaginatedMeta>(
+      `/api/patients/${patientId}/visits?${params}`
+    );
+  },
 
   getVisit: (patientId: string, visitId: string) =>
     request<Visit>(`/api/patients/${patientId}/visits/${visitId}`),
@@ -446,8 +496,12 @@ export const api = {
   deleteVisit: (patientId: string, visitId: string) =>
     request<{ ok: boolean }>(`/api/patients/${patientId}/visits/${visitId}`, { method: 'DELETE' }),
 
-  listProgress: (patientId: string) =>
-    request<ProgressLog[]>(`/api/patients/${patientId}/progress`),
+  listProgress: (patientId: string, page = 1, pageSize = 10) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return request<{ logs: ProgressLog[] } & PaginatedMeta>(
+      `/api/patients/${patientId}/progress?${params}`
+    );
+  },
 
   createProgress: (patientId: string, body: Partial<ProgressLog>) =>
     request<ProgressLog>(`/api/patients/${patientId}/progress`, {
@@ -466,8 +520,12 @@ export const api = {
   deleteProgress: (patientId: string, logId: string) =>
     request<{ ok: boolean }>(`/api/patients/${patientId}/progress/${logId}`, { method: 'DELETE' }),
 
-  listAttachments: (patientId: string) =>
-    request<Attachment[]>(`/api/patients/${patientId}/attachments`),
+  listAttachments: (patientId: string, page = 1, pageSize = 10) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return request<{ attachments: Attachment[] } & PaginatedMeta>(
+      `/api/patients/${patientId}/attachments?${params}`
+    );
+  },
 
   uploadAttachment: async (patientId: string, file: File, visitId?: string) => {
     const { compressImageForUpload } = await import('./compressImage');
@@ -489,12 +547,16 @@ export const api = {
       method: 'DELETE',
     }),
 
-  listDiseaseAssessments: (patientId: string, formType?: string) =>
-    request<DiseaseAssessment[]>(
-      `/api/patients/${patientId}/disease-assessments${
-        formType ? `?formType=${encodeURIComponent(formType)}` : ''
-      }`
-    ),
+  listDiseaseAssessments: (patientId: string, formType?: string, page = 1, pageSize = 10) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (formType) params.set('formType', formType);
+    return request<{ assessments: DiseaseAssessment[] } & PaginatedMeta>(
+      `/api/patients/${patientId}/disease-assessments?${params}`
+    );
+  },
 
   getDiseaseAssessment: (patientId: string, assessmentId: string) =>
     request<DiseaseAssessment>(

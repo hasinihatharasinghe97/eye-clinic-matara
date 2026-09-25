@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, localClinicDate, type Patient } from '../api';
 import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
 import { useToast } from '../components/Toast';
+import { DateInput } from '../components/DateInput';
 
 type Props = {
   patientId?: string;
@@ -137,8 +138,7 @@ export function PatientForm({ patientId, onDone, onCancel }: Props) {
         </div>
         <div className="field">
           <label>Date</label>
-          <input
-            type="date"
+          <DateInput
             value={form.registrationDate || ''}
             onChange={(e) => set('registrationDate', e.target.value)}
           />

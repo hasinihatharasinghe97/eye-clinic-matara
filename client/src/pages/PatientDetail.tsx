@@ -14,9 +14,11 @@ import { PatientChartsPanel } from './PatientCharts';
 import { CameraCapture } from '../components/CameraCapture';
 import { SendMedicineWhatsApp } from '../components/SendMedicineWhatsApp';
 import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { PAGE_SIZE_OPTIONS, Pagination } from '../components/Pagination';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { VisitTodayTick } from '../components/VisitTodayTick';
+import { DateInput } from '../components/DateInput';
 
 function formatWhen(value: string) {
   if (!value) return '—';
@@ -70,34 +72,92 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const [newFormType, setNewFormType] = useState('');
   const [visitedToday, setVisitedToday] = useState(false);
   const [togglingVisit, setTogglingVisit] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
+  const [listTotal, setListTotal] = useState(0);
+  const [tabLoading, setTabLoading] = useState(false);
   const today = localClinicDate();
+
+  const active =
+    tab === 'progress'
+      ? 'progress'
+      : tab === 'images'
+        ? 'images'
+        : tab === 'charts'
+          ? 'charts'
+          : tab === 'whatsapp'
+            ? 'whatsapp'
+            : tab === 'diseases'
+              ? 'diseases'
+              : 'visits';
 
   useEffect(() => {
     setNewFormType('');
     setFilterFormType('');
+    setPage(1);
   }, [patientId]);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    setPage(1);
+  }, [active, filterFormType]);
+
+  const loadPatient = useCallback(async () => {
     try {
-      const [p, v, l, a, d] = await Promise.all([
-        api.getPatient(patientId, today),
-        api.listVisits(patientId),
-        api.listProgress(patientId),
-        api.listAttachments(patientId),
-        api.listDiseaseAssessments(patientId),
-      ]);
+      const p = await api.getPatient(patientId, today);
       setPatient(p);
       setVisitedToday(Boolean(p.visitedToday));
-      setVisits(v);
-      setLogs(l);
-      setFiles(a);
-      setAssessments(d);
       setLoadFailed(false);
     } catch (err) {
+      setPatient(null);
       setLoadFailed(true);
       toast.error(err instanceof Error ? err.message : 'Failed to load patient');
     }
   }, [patientId, today, toast]);
+
+  const fetchTabList = useCallback(async () => {
+    if (active === 'charts' || active === 'whatsapp') return;
+    setTabLoading(true);
+    try {
+      if (active === 'visits') {
+        const res = await api.listVisits(patientId, page, pageSize);
+        if (res.total > 0 && res.visits.length === 0 && page > 1) {
+          setPage(1);
+          return;
+        }
+        setVisits(res.visits);
+        setListTotal(res.total);
+      } else if (active === 'diseases') {
+        const formType = filterFormType || undefined;
+        const res = await api.listDiseaseAssessments(patientId, formType, page, pageSize);
+        if (res.total > 0 && res.assessments.length === 0 && page > 1) {
+          setPage(1);
+          return;
+        }
+        setAssessments(res.assessments);
+        setListTotal(res.total);
+      } else if (active === 'progress') {
+        const res = await api.listProgress(patientId, page, pageSize);
+        if (res.total > 0 && res.logs.length === 0 && page > 1) {
+          setPage(1);
+          return;
+        }
+        setLogs(res.logs);
+        setListTotal(res.total);
+      } else if (active === 'images') {
+        const res = await api.listAttachments(patientId, page, pageSize);
+        if (res.total > 0 && res.attachments.length === 0 && page > 1) {
+          setPage(1);
+          return;
+        }
+        setFiles(res.attachments);
+        setListTotal(res.total);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load list');
+    } finally {
+      setTabLoading(false);
+    }
+  }, [active, patientId, page, pageSize, filterFormType, toast]);
 
   async function toggleVisitedToday(next: boolean) {
     setTogglingVisit(true);
@@ -113,8 +173,13 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   }
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadPatient();
+  }, [loadPatient]);
+
+  useEffect(() => {
+    if (!patient) return;
+    fetchTabList();
+  }, [patient, fetchTabList]);
 
   const patientConditions = patient?.conditions || [];
   const availableForms = useMemo(() => {
@@ -151,7 +216,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
         rightScore: '',
         leftScore: '',
       });
-      await load();
+      await fetchTabList();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save progress');
     }
@@ -160,9 +225,13 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   async function uploadFile(file: File) {
     setUploading(true);
     try {
-      const created = await api.uploadAttachment(patientId, file);
-      setFiles((prev) => [created, ...prev]);
+      await api.uploadAttachment(patientId, file);
       setCameraOpen(false);
+      if (page === 1) {
+        await fetchTabList();
+      } else {
+        setPage(1);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -189,22 +258,17 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
     );
   }
 
-  const active =
-    tab === 'progress'
-      ? 'progress'
-      : tab === 'images'
-        ? 'images'
-        : tab === 'charts'
-          ? 'charts'
-          : tab === 'whatsapp'
-            ? 'whatsapp'
-            : tab === 'diseases'
-              ? 'diseases'
-              : 'visits';
-
-  const filteredAssessments = filterFormType
-    ? assessments.filter((a) => a.formType === filterFormType)
-    : assessments;
+  const paginationProps = {
+    total: listTotal,
+    page,
+    pageSize,
+    disabled: tabLoading,
+    onPageChange: setPage,
+    onPageSizeChange: (n: number) => {
+      setPageSize(n as (typeof PAGE_SIZE_OPTIONS)[number]);
+      setPage(1);
+    },
+  };
 
   return (
     <>
@@ -340,7 +404,9 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               Add screening form
             </button>
           </div>
-          {visits.length === 0 ? (
+          {tabLoading && visits.length === 0 ? (
+            <LoadingBlock label="Loading visits…" />
+          ) : listTotal === 0 ? (
             <EmptyState
               title="No screening forms yet"
               hint="Mark Visited today for normal clinic days. Add a screening form only when you need full eye findings."
@@ -348,6 +414,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               onAction={() => onNavigate(`/patients/${patientId}/visits/new`)}
             />
           ) : (
+            <>
             <div className="table-wrap">
               <table className="table">
                 <thead>
@@ -388,7 +455,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                             try {
                               await api.deleteVisit(patientId, v.id);
                               toast.success('Visit deleted.');
-                              await load();
+                              await fetchTabList();
                             } catch (err) {
                               toast.error(
                                 err instanceof Error ? err.message : 'Could not delete visit'
@@ -404,6 +471,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 </tbody>
               </table>
             </div>
+            <Pagination {...paginationProps} />
+            </>
           )}
         </div>
       )}
@@ -490,9 +559,12 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 ))}
               </select>
             </div>
-            {filteredAssessments.length === 0 ? (
+            {tabLoading && assessments.length === 0 ? (
+              <LoadingBlock label="Loading assessments…" />
+            ) : listTotal === 0 ? (
               <p className="empty">No disease assessments yet.</p>
             ) : (
+              <>
               <div className="table-wrap">
                 <table className="table">
                   <thead>
@@ -504,7 +576,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredAssessments.map((a) => (
+                    {assessments.map((a) => (
                       <tr key={a.id}>
                         <td>{formatWhen(a.assessmentDate)}</td>
                         <td>{diseaseFormTitle(a.formType)}</td>
@@ -535,7 +607,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                               try {
                                 await api.deleteDiseaseAssessment(patientId, a.id);
                                 toast.success('Assessment deleted.');
-                                await load();
+                                await fetchTabList();
                               } catch (err) {
                                 toast.error(
                                   err instanceof Error
@@ -553,6 +625,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                   </tbody>
                 </table>
               </div>
+              <Pagination {...paginationProps} />
+              </>
             )}
           </div>
         </>
@@ -570,8 +644,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             <div className="grid-3">
               <div className="field">
                 <label>Date</label>
-                <input
-                  type="date"
+                <DateInput
                   value={logForm.logDate}
                   onChange={(e) => setLogForm((f) => ({ ...f, logDate: e.target.value }))}
                   required
@@ -623,9 +696,12 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
 
           <div className="card">
             <h3>Improvement timeline</h3>
-            {logs.length === 0 ? (
+            {tabLoading && logs.length === 0 ? (
+              <LoadingBlock label="Loading progress…" />
+            ) : listTotal === 0 ? (
               <p className="empty">No progress rows yet.</p>
             ) : (
+              <>
               <div className="table-wrap">
                 <table className="table">
                   <thead>
@@ -661,7 +737,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                               try {
                                 await api.deleteProgress(patientId, log.id);
                                 toast.success('Progress entry deleted.');
-                                await load();
+                                await fetchTabList();
                               } catch (err) {
                                 toast.error(
                                   err instanceof Error
@@ -679,6 +755,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                   </tbody>
                 </table>
               </div>
+              <Pagination {...paginationProps} />
+              </>
             )}
           </div>
         </>
@@ -713,11 +791,14 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             Use <strong>Take photo</strong> to open the device camera, capture a report picture, then save it
             to this patient.
           </p>
-          {files.length === 0 ? (
+          {tabLoading && files.length === 0 ? (
+            <LoadingBlock label="Loading images…" />
+          ) : listTotal === 0 ? (
             <p className="empty">
               No files uploaded yet. Take a photo or upload a scanned image / PDF.
             </p>
           ) : (
+            <>
             <div className="gallery">
               {files.map((f) => (
                 <div className="gallery-item" key={f.id}>
@@ -757,7 +838,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                         try {
                           await api.deleteAttachment(patientId, f.id);
                           toast.success('File deleted.');
-                          await load();
+                          await fetchTabList();
                         } catch (err) {
                           toast.error(
                             err instanceof Error ? err.message : 'Could not delete file'
@@ -771,6 +852,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 </div>
               ))}
             </div>
+            <Pagination {...paginationProps} />
+            </>
           )}
           <CameraCapture
             open={cameraOpen}

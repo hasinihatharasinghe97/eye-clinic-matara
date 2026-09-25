@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
 import { normalizeClinicDate, normalizeFormDataDates, nowClinic } from '../clinicDate.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 
 const router = Router({ mergeParams: true });
 
@@ -67,25 +68,43 @@ router.get('/', async (req, res) => {
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
   const formType = String(req.query.formType || '').trim();
+  const { page, pageSize, offset } = parsePagination(req.query);
+
+  let total;
   let rows;
   if (formType) {
+    const countRow = await db
+      .prepare(
+        'SELECT COUNT(*) AS total FROM disease_assessments WHERE patient_id = ? AND form_type = ?'
+      )
+      .get(req.params.patientId, formType);
+    total = Number(countRow?.total || 0);
     rows = await db
       .prepare(
         `SELECT * FROM disease_assessments
          WHERE patient_id = ? AND form_type = ?
-         ORDER BY assessment_date DESC, created_at DESC`
+         ORDER BY assessment_date DESC, created_at DESC
+         LIMIT ${pageSize} OFFSET ${offset}`
       )
       .all(req.params.patientId, formType);
   } else {
+    const countRow = await db
+      .prepare('SELECT COUNT(*) AS total FROM disease_assessments WHERE patient_id = ?')
+      .get(req.params.patientId);
+    total = Number(countRow?.total || 0);
     rows = await db
       .prepare(
         `SELECT * FROM disease_assessments
          WHERE patient_id = ?
-         ORDER BY assessment_date DESC, created_at DESC`
+         ORDER BY assessment_date DESC, created_at DESC
+         LIMIT ${pageSize} OFFSET ${offset}`
       )
       .all(req.params.patientId);
   }
-  res.json(rows.map(mapRow));
+  res.json({
+    assessments: rows.map(mapRow),
+    ...paginationMeta(page, pageSize, total),
+  });
 });
 
 router.get('/:assessmentId', async (req, res) => {

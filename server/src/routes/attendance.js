@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
 import { normalizeClinicDate, nowClinic } from '../clinicDate.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 
 const router = Router({ mergeParams: true });
 
@@ -20,27 +21,39 @@ router.get('/', async (req, res) => {
       .get(req.params.patientId);
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
+    const { page, pageSize, offset } = parsePagination(req.query);
+    const onDate = normalizeClinicDate(req.query.onDate);
+
+    const countRow = await db
+      .prepare('SELECT COUNT(*) AS total FROM clinic_attendance WHERE patient_id = ?')
+      .get(req.params.patientId);
+    const total = Number(countRow?.total || 0);
+
     const rows = await db
       .prepare(
         `SELECT visit_date, created_at, opd_ad_no
          FROM clinic_attendance
          WHERE patient_id = ?
          ORDER BY visit_date DESC
-         LIMIT 90`
+         LIMIT ${pageSize} OFFSET ${offset}`
       )
       .all(req.params.patientId);
 
-    const onDate = normalizeClinicDate(req.query.onDate);
-    const visitedOnDate = rows.some((r) => asDateKey(r.visit_date) === onDate);
+    const todayRow = await db
+      .prepare(
+        'SELECT id FROM clinic_attendance WHERE patient_id = ? AND visit_date = ? LIMIT 1'
+      )
+      .get(req.params.patientId, onDate);
 
     res.json({
       onDate,
-      visitedToday: visitedOnDate,
+      visitedToday: Boolean(todayRow),
       dates: rows.map((r) => ({
         date: asDateKey(r.visit_date),
         createdAt: r.created_at,
         opdAdNo: r.opd_ad_no ?? null,
       })),
+      ...paginationMeta(page, pageSize, total),
     });
   } catch (err) {
     console.error('[attendance] list failed:', err);

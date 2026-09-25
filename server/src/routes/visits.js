@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
 import { clinicCalendarDate, normalizeClinicDate, nowClinic } from '../clinicDate.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 
 const router = Router({ mergeParams: true });
 
@@ -96,10 +97,22 @@ router.get('/', async (req, res) => {
   if (!(await ensurePatient(req.params.patientId))) {
     return res.status(404).json({ error: 'Patient not found' });
   }
+  const { page, pageSize, offset } = parsePagination(req.query);
+  const countRow = await db
+    .prepare('SELECT COUNT(*) AS total FROM visits WHERE patient_id = ?')
+    .get(req.params.patientId);
+  const total = Number(countRow?.total || 0);
   const rows = await db
-    .prepare('SELECT * FROM visits WHERE patient_id = ? ORDER BY visit_date DESC, created_at DESC')
+    .prepare(
+      `SELECT * FROM visits WHERE patient_id = ?
+       ORDER BY visit_date DESC, created_at DESC
+       LIMIT ${pageSize} OFFSET ${offset}`
+    )
     .all(req.params.patientId);
-  res.json(rows.map(mapVisit));
+  res.json({
+    visits: rows.map(mapVisit),
+    ...paginationMeta(page, pageSize, total),
+  });
 });
 
 router.get('/:visitId', async (req, res) => {

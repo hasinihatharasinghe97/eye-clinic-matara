@@ -12,6 +12,7 @@ import {
 } from '../api';
 import { emptyVisualField, VisualFieldMarker } from '../components/VisualFieldMarker';
 import { useToast } from '../components/Toast';
+import { DateInput } from '../components/DateInput';
 
 type Props = {
   patientId: string;
@@ -224,8 +225,7 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
       <div className="grid-2">
         <div className="field">
           <label>Visit date</label>
-          <input
-            type="date"
+          <DateInput
             value={form.visitDate}
             onChange={(e) => setForm((f) => ({ ...f, visitDate: e.target.value }))}
             required

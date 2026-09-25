@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db, { getPatientOpd } from '../db.js';
 import { clinicCalendarDate, normalizeClinicDate, nowClinic } from '../clinicDate.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 
 const router = Router({ mergeParams: true });
 
@@ -33,10 +34,22 @@ function mapLog(row) {
 router.get('/', async (req, res) => {
   const patient = await db.prepare('SELECT id FROM patients WHERE id = ?').get(req.params.patientId);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const { page, pageSize, offset } = parsePagination(req.query);
+  const countRow = await db
+    .prepare('SELECT COUNT(*) AS total FROM progress_logs WHERE patient_id = ?')
+    .get(req.params.patientId);
+  const total = Number(countRow?.total || 0);
   const rows = await db
-    .prepare('SELECT * FROM progress_logs WHERE patient_id = ? ORDER BY log_date DESC, created_at DESC')
+    .prepare(
+      `SELECT * FROM progress_logs WHERE patient_id = ?
+       ORDER BY log_date DESC, created_at DESC
+       LIMIT ${pageSize} OFFSET ${offset}`
+    )
     .all(req.params.patientId);
-  res.json(rows.map(mapLog));
+  res.json({
+    logs: rows.map(mapLog),
+    ...paginationMeta(page, pageSize, total),
+  });
 });
 
 router.post('/', async (req, res) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
@@ -7,29 +7,14 @@ import {
   type DailyAttendancePatient,
 } from '../api';
 import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { PAGE_SIZE_OPTIONS, Pagination } from '../components/Pagination';
 import { useToast } from '../components/Toast';
+import { DateInput } from '../components/DateInput';
 
 type SortKey = 'visitDate' | 'name' | 'age' | 'opdAdNo' | 'address';
 type SortDir = 'asc' | 'desc';
 
-function compareRows(
-  a: DailyAttendancePatient,
-  b: DailyAttendancePatient,
-  key: SortKey,
-  dir: SortDir
-) {
-  const av = a[key];
-  const bv = b[key];
-  let cmp = 0;
-  if (key === 'age') {
-    const an = av == null || av === '' ? Number.NEGATIVE_INFINITY : Number(av);
-    const bn = bv == null || bv === '' ? Number.NEGATIVE_INFINITY : Number(bv);
-    cmp = an - bn;
-  } else {
-    cmp = String(av ?? '').localeCompare(String(bv ?? ''), undefined, { sensitivity: 'base' });
-  }
-  return dir === 'asc' ? cmp : -cmp;
-}
+const PDF_PAGE_SIZE = PAGE_SIZE_OPTIONS[PAGE_SIZE_OPTIONS.length - 1];
 
 function formatDisplayDate(isoDay: string) {
   const [y, m, d] = isoDay.split('-').map(Number);
@@ -121,12 +106,45 @@ function downloadDailyPdf(fromDate: string, toDate: string, rows: DailyAttendanc
   doc.save(file);
 }
 
+async function fetchAllAttendanceRows(
+  rangeFrom: string,
+  rangeTo: string,
+  sortKey: SortKey,
+  sortDir: SortDir
+): Promise<DailyAttendancePatient[]> {
+  const first = await api.getDailyAttendance(
+    rangeFrom,
+    rangeTo,
+    1,
+    PDF_PAGE_SIZE,
+    sortKey,
+    sortDir
+  );
+  const all = [...first.patients];
+  const totalPages = Math.max(1, Math.ceil(first.total / PDF_PAGE_SIZE));
+  for (let p = 2; p <= totalPages; p++) {
+    const res = await api.getDailyAttendance(
+      rangeFrom,
+      rangeTo,
+      p,
+      PDF_PAGE_SIZE,
+      sortKey,
+      sortDir
+    );
+    all.push(...res.patients);
+  }
+  return all;
+}
+
 export function DailyReportPage() {
   const toast = useToast();
   const today = localClinicDate();
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
   const [rows, setRows] = useState<DailyAttendancePatient[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
   const [sortKey, setSortKey] = useState<SortKey>('visitDate');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [busy, setBusy] = useState(true);
@@ -138,18 +156,28 @@ export function DailyReportPage() {
   const multiDay = rangeFrom !== rangeTo;
 
   useEffect(() => {
+    setPage(1);
+  }, [rangeFrom, rangeTo]);
+
+  useEffect(() => {
     let cancelled = false;
     setBusy(true);
     api
-      .getDailyAttendance(rangeFrom, rangeTo)
+      .getDailyAttendance(rangeFrom, rangeTo, page, pageSize, sortKey, sortDir)
       .then((report) => {
         if (cancelled) return;
+        if (report.total > 0 && report.patients.length === 0 && page > 1) {
+          setPage(1);
+          return;
+        }
         setRows(report.patients);
+        setTotal(report.total);
         setLoadFailed(false);
       })
       .catch((err) => {
         if (cancelled) return;
         setRows([]);
+        setTotal(0);
         setLoadFailed(true);
         toast.error(err instanceof Error ? err.message : 'Failed to load attendance');
       })
@@ -159,12 +187,7 @@ export function DailyReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [rangeFrom, rangeTo, toast]);
-
-  const sorted = useMemo(
-    () => [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDir)),
-    [rows, sortKey, sortDir]
-  );
+  }, [rangeFrom, rangeTo, page, pageSize, sortKey, sortDir, toast]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -172,12 +195,14 @@ export function DailyReportPage() {
       setSortKey(key);
       setSortDir('asc');
     }
+    setPage(1);
   }
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     setPdfBusy(true);
     try {
-      downloadDailyPdf(rangeFrom, rangeTo, sorted);
+      const allRows = await fetchAllAttendanceRows(rangeFrom, rangeTo, sortKey, sortDir);
+      downloadDailyPdf(rangeFrom, rangeTo, allRows);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not create PDF');
     } finally {
@@ -202,16 +227,14 @@ export function DailyReportPage() {
         <div className="page-toolbar-actions">
           <label className="daily-date-field">
             <span className="muted">From</span>
-            <input
-              type="date"
+            <DateInput
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value || localClinicDate())}
             />
           </label>
           <label className="daily-date-field">
             <span className="muted">To</span>
-            <input
-              type="date"
+            <DateInput
               value={toDate}
               onChange={(e) => setToDate(e.target.value || localClinicDate())}
             />
@@ -230,7 +253,7 @@ export function DailyReportPage() {
           <button
             className="btn"
             type="button"
-            disabled={busy || pdfBusy || sorted.length === 0}
+            disabled={busy || pdfBusy || total === 0}
             onClick={handleDownloadPdf}
           >
             {pdfBusy ? 'Preparing…' : 'Download PDF'}
@@ -245,7 +268,7 @@ export function DailyReportPage() {
           title="Could not load attendance"
           hint="Check your connection and try changing the date range."
         />
-      ) : rows.length === 0 ? (
+      ) : total === 0 ? (
         <EmptyState
           title="No visits in this range"
           hint={`Nobody was marked Visited for ${rangeLabel(rangeFrom, rangeTo)}. Tick patients on the Patients list first.`}
@@ -254,7 +277,6 @@ export function DailyReportPage() {
         <div className="card daily-report-card">
           <div className="daily-report-meta">
             <strong>{rangeLabel(rangeFrom, rangeTo)}</strong>
-            <span className="muted">Count: {sorted.length}</span>
           </div>
 
           <div className="table-wrap">
@@ -295,7 +317,7 @@ export function DailyReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((r) => (
+                {rows.map((r) => (
                   <tr key={`${r.id}-${r.visitDate}`}>
                     {multiDay && <td>{r.visitDate}</td>}
                     <td>{r.name}</td>
@@ -307,6 +329,17 @@ export function DailyReportPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            disabled={busy}
+            onPageChange={setPage}
+            onPageSizeChange={(n) => {
+              setPageSize(n as (typeof PAGE_SIZE_OPTIONS)[number]);
+              setPage(1);
+            }}
+          />
         </div>
       )}
     </>

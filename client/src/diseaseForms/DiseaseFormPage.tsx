@@ -5,6 +5,7 @@ import { FormFields } from './FormFields';
 import { nowDate, toDateValue } from './helpers';
 import type { FormDataMap } from './types';
 import { useToast } from '../components/Toast';
+import { DateInput } from '../components/DateInput';
 
 type Props = {
   patientId: string;
@@ -96,8 +97,7 @@ export function DiseaseFormPage({
       <div className="grid-3">
         <div className="field">
           <label>Assessment date</label>
-          <input
-            type="date"
+          <DateInput
             value={assessmentDate}
             onChange={(e) => setAssessmentDate(e.target.value)}
             required

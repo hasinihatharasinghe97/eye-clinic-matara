@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import multer from 'multer';
 import db, { storeUploadFile, deleteUploadFile, getPatientOpd } from '../db.js';
 import { nowClinic } from '../clinicDate.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 
 const router = Router({ mergeParams: true });
 
@@ -39,10 +40,22 @@ function mapAttachment(row) {
 router.get('/', async (req, res) => {
   const patient = await db.prepare('SELECT id FROM patients WHERE id = ?').get(req.params.patientId);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  const { page, pageSize, offset } = parsePagination(req.query);
+  const countRow = await db
+    .prepare('SELECT COUNT(*) AS total FROM attachments WHERE patient_id = ?')
+    .get(req.params.patientId);
+  const total = Number(countRow?.total || 0);
   const rows = await db
-    .prepare('SELECT * FROM attachments WHERE patient_id = ? ORDER BY created_at DESC')
+    .prepare(
+      `SELECT * FROM attachments WHERE patient_id = ?
+       ORDER BY created_at DESC
+       LIMIT ${pageSize} OFFSET ${offset}`
+    )
     .all(req.params.patientId);
-  res.json(rows.map(mapAttachment));
+  res.json({
+    attachments: rows.map(mapAttachment),
+    ...paginationMeta(page, pageSize, total),
+  });
 });
 
 router.post('/', (req, res) => {

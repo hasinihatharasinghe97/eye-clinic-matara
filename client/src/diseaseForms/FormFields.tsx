@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import type { FollowupColumn, FormDataMap, FormField, InputKind } from './types';
 import {
   htmlInputType,
@@ -8,6 +8,7 @@ import {
   toDateTimeLocalValue,
   toDateValue,
 } from './helpers';
+import { DateInput, DateTimeLocalInput } from '../components/DateInput';
 
 type Props = {
   fields: FormField[];
@@ -113,8 +114,7 @@ export function FormFields({ fields, data, onChange }: Props) {
         if (field.type === 'date') {
           return (
             <FieldShell key={field.key} label={field.label}>
-              <input
-                type="date"
+              <DateInput
                 value={toDateValue(data[field.key])}
                 onChange={(e) => setKey(field.key, e.target.value)}
               />
@@ -125,8 +125,7 @@ export function FormFields({ fields, data, onChange }: Props) {
         if (field.type === 'datetime') {
           return (
             <FieldShell key={field.key} label={field.label}>
-              <input
-                type="datetime-local"
+              <DateTimeLocalInput
                 value={toDateTimeLocalValue(data[field.key])}
                 onChange={(e) => setKey(field.key, e.target.value)}
               />
@@ -274,31 +273,40 @@ export function FormFields({ fields, data, onChange }: Props) {
                         <tr key={rowIdx}>
                           {field.columns.map((col) => {
                             const kind = columnKind(col);
+                            const common = {
+                              className: `followup-input followup-input--${kind}`,
+                              value: displayValue(kind, row[col.key]),
+                              onChange: (e: ChangeEvent<HTMLInputElement>) => {
+                                const next = rows.map((r, i) =>
+                                  i === rowIdx ? { ...r, [col.key]: e.target.value } : r
+                                );
+                                setKey(field.key, next);
+                              },
+                            };
                             return (
                               <td key={col.key}>
-                                <input
-                                  className={`followup-input followup-input--${kind}`}
-                                  type={htmlInputType(kind)}
-                                  inputMode={kind === 'number' ? 'decimal' : undefined}
-                                  step={kind === 'number' ? col.step ?? 'any' : undefined}
-                                  min={kind === 'number' ? col.min : undefined}
-                                  max={kind === 'number' ? col.max : undefined}
-                                  placeholder={
-                                    col.placeholder ||
-                                    (kind === 'number'
-                                      ? examplePlaceholder(col.label, 'number')
-                                      : kind === 'text' || kind === 'tel'
-                                        ? examplePlaceholder(col.label, 'text')
-                                        : undefined)
-                                  }
-                                  value={displayValue(kind, row[col.key])}
-                                  onChange={(e) => {
-                                    const next = rows.map((r, i) =>
-                                      i === rowIdx ? { ...r, [col.key]: e.target.value } : r
-                                    );
-                                    setKey(field.key, next);
-                                  }}
-                                />
+                                {kind === 'date' ? (
+                                  <DateInput {...common} />
+                                ) : kind === 'datetime' ? (
+                                  <DateTimeLocalInput {...common} />
+                                ) : (
+                                  <input
+                                    {...common}
+                                    type={htmlInputType(kind)}
+                                    inputMode={kind === 'number' ? 'decimal' : undefined}
+                                    step={kind === 'number' ? col.step ?? 'any' : undefined}
+                                    min={kind === 'number' ? col.min : undefined}
+                                    max={kind === 'number' ? col.max : undefined}
+                                    placeholder={
+                                      col.placeholder ||
+                                      (kind === 'number'
+                                        ? examplePlaceholder(col.label, 'number')
+                                        : kind === 'text' || kind === 'tel'
+                                          ? examplePlaceholder(col.label, 'text')
+                                          : undefined)
+                                    }
+                                  />
+                                )}
                               </td>
                             );
                           })}

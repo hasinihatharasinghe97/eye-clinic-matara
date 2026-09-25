@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import db, { UPLOADS_DIR, IS_CLOUD, deleteUploadFile, syncOpdToRelatedTables } from '../db.js';
 import { normalizeClinicDate, clinicCalendarDate, nowClinic } from '../clinicDate.js';
+import { parsePagination, paginationMeta } from '../pagination.js';
 import { getPatientCharts } from './stats.js';
 import attendanceRouter from './attendance.js';
 
@@ -64,16 +65,11 @@ function mapPatient(row, visitedToday = false) {
   };
 }
 
-const PAGE_SIZES = new Set([10, 25, 50, 100]);
-
 router.get('/', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim();
     const onDate = normalizeClinicDate(req.query.onDate);
-    const pageSizeRaw = Number(req.query.pageSize);
-    const pageSize = PAGE_SIZES.has(pageSizeRaw) ? pageSizeRaw : 10;
-    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
-    const offset = (page - 1) * pageSize;
+    const { page, pageSize, offset } = parsePagination(req.query);
 
     let total;
     let rows;
@@ -121,9 +117,7 @@ router.get('/', async (req, res) => {
 
     res.json({
       patients: rows.map((r) => mapPatient(r, r.visited_today)),
-      total,
-      page,
-      pageSize,
+      ...paginationMeta(page, pageSize, total),
       visitedToday: Number(visitedRow?.c || 0),
     });
   } catch (err) {
@@ -132,8 +126,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/recent-assessments', async (_req, res) => {
+router.get('/recent-assessments', async (req, res) => {
   try {
+    const { page, pageSize, offset } = parsePagination(req.query);
+    const countRow = await db.prepare('SELECT COUNT(*) AS total FROM disease_assessments').get();
+    const total = Number(countRow?.total || 0);
     const rows = await db
       .prepare(
         `SELECT a.id AS assessment_id, a.assessment_date, a.form_type, a.eye,
@@ -141,10 +138,13 @@ router.get('/recent-assessments', async (_req, res) => {
          FROM disease_assessments a
          JOIN patients p ON p.id = a.patient_id
          ORDER BY a.assessment_date DESC, a.created_at DESC
-         LIMIT 15`
+         LIMIT ${pageSize} OFFSET ${offset}`
       )
       .all();
-    res.json(rows);
+    res.json({
+      assessments: rows,
+      ...paginationMeta(page, pageSize, total),
+    });
   } catch (err) {
     console.error('[patients] recent-assessments failed:', err);
     res.status(500).json({ error: err.message || 'Could not load recent assessments' });
