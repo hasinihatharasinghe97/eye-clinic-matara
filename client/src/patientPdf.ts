@@ -19,11 +19,7 @@ import {
   fetchAllVisits,
   formatValue,
   hasValue,
-  parseRL,
-  plusMinusLabel,
-  rlText,
-  visionText,
-  visualFieldText,
+  VISIT_SECTIONS,
 } from './visitSummary';
 
 const HEAD_COLOR: [number, number, number] = [15, 76, 92];
@@ -144,125 +140,31 @@ class PdfBuilder {
   }
 }
 
+/**
+ * One screening visit: every field of the screening form, grouped by the form's
+ * sections (empty fields left blank), so each visit reads like the form.
+ */
 function addVisit(pdf: PdfBuilder, v: Visit, index: number) {
   pdf.heading(`Visit ${index + 1} - ${v.visitDate}`, 11);
-  pdf.details([
-    ['Diagnosis', v.diagnosis],
-    ['C/O (Complaints)', v.coComplaints],
-    ['O.C (Other complaints)', v.ocOther],
-    ['Family history', v.familyHistory],
-  ]);
-
-  const ext = v.examExternal || {};
-  pdf.details(
-    [
-      ['Head posture', ext.headPosture],
-      ['Forehead and facial symmetry', ext.foreheadFacialSymmetry],
-      ['Eyebrows', ext.eyebrows],
-      ['Eyelids', ext.eyelids],
-      ['Palpebral aperture', ext.palpebralAperture],
-      ['Lacrimal apparatus', ext.lacrimalApparatus],
-      ['Eyeball', ext.eyeball],
-    ],
-    'External examination'
-  );
-
-  const d = v.vision?.distance || {};
-  const n = v.vision?.near || {};
-  const c = v.vision?.contrast || {};
-  const visionRows: string[][] = [];
-  if (d.rEye || d.rPh || d.lEye || d.lPh) {
-    visionRows.push([
-      'Distance',
-      visionText(d.rEye),
-      visionText(d.rPh),
-      visionText(d.lEye),
-      visionText(d.lPh),
+  const body: RowInput[] = [];
+  for (const section of VISIT_SECTIONS) {
+    body.push([
+      {
+        content: pdfText(section.title),
+        colSpan: 2,
+        styles: { fillColor: [228, 242, 236], textColor: HEAD_COLOR, fontStyle: 'bold' },
+      },
     ]);
-  }
-  if (n.rEye || n.rPh || n.lEye || n.lPh) {
-    visionRows.push([
-      'Near',
-      visionText(n.rEye),
-      visionText(n.rPh),
-      visionText(n.lEye),
-      visionText(n.lPh),
-    ]);
-  }
-  if (c.rEye || c.lEye) visionRows.push(['Contrast (1-10)', c.rEye || '', '', c.lEye || '', '']);
-  const colorRL = parseRL(v.colorVision);
-  if (colorRL && (colorRL.r || colorRL.l)) {
-    visionRows.push(['Color vision (1-30)', colorRL.r, '', colorRL.l, '']);
-  }
-  for (const [key, name] of [
-    ['glare', 'Glare test'],
-    ['halo', 'Halo test'],
-  ] as const) {
-    const t = v.vision?.[key] || {};
-    if (t.rEye || t.lEye) {
-      visionRows.push([name, plusMinusLabel(t.rEye), '', plusMinusLabel(t.lEye), '']);
+    for (const row of section.rows) {
+      // Empty fields stay blank: "-" already means blind (vision) or negative (glare/halo).
+      body.push([row.label, row.get(v)]);
     }
   }
-  if (visionRows.length) {
-    pdf.heading('Vision', 10);
-    pdf.table(['', 'R-Eye', 'R ph', 'L-Eye', 'L ph'], visionRows, { theme: 'grid' });
-  }
-
-  pdf.details([['Visual field', visualFieldText(v.visualField)]]);
-
-  const ins = v.inspection || {};
-  pdf.details(
-    [
-      ['Sclera', ins.sclera],
-      ['Pupil size', ins.pupilSize],
-      ['Pupil shape', ins.pupilShape],
-      ['Pupillary light reflex', ins.pupillaryLightReflex],
-      ['Eyelid ptosis', ins.eyelidPtosis],
-      ['Nystagmus', ins.nystagmus],
-      ['Conjunctiva', ins.conjunctiva],
-      ['Ocular movements', ins.ocularMovements],
-      ['Corneal sensation', ins.cornealSensation],
-    ],
-    'Inspection'
-  );
-
-  const sl = v.slitLamp || {};
-  pdf.details(
-    [
-      ['Anterior segment', sl.anteriorSegment],
-      ['IOP (mmHg)', rlText(v.iop)],
-      ['Optic nerve head', sl.opticNerveHead],
-      ['Ophthalmoscopy - lens', sl.ophthalmoscopyLens],
-    ],
-    'Slit lamp / IOP'
-  );
-
-  const cat = v.cataract || {};
-  const catFlags = [
-    cat.rightEye && 'R eye',
-    cat.leftEye && 'L eye',
-    cat.psc && 'PSC',
-    cat.psx && 'PSX',
-    cat.subluxed && 'Sub luxed / disloc',
-  ].filter(Boolean);
-  pdf.details(
-    [
-      ['Findings', catFlags.join(', ')],
-      ['NS grade', cat.nsGrade],
-      ['K1', cat.k1],
-      ['K2', cat.k2],
-      ['Cyl', cat.cyl],
-      ['Cyl axis', cat.cylAxis],
-      ['Axial (mm)', cat.axialMm],
-      ['Diopter', cat.diopter],
-    ],
-    'Cataract assessment'
-  );
-
-  pdf.details([
-    ['Ix / Investigations', v.ixHistory],
-    ['Additional notes', v.notes],
-  ]);
+  pdf.table(null, body, {
+    theme: 'grid',
+    columnStyles: { 0: { cellWidth: 60, fontStyle: 'bold', textColor: 60 } },
+    rowPageBreak: 'avoid',
+  });
 }
 
 function addAssessment(pdf: PdfBuilder, a: DiseaseAssessment) {
