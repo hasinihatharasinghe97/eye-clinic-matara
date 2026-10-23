@@ -12,24 +12,19 @@ if errorlevel 1 (
 
 echo Project folder: %cd%
 echo.
-echo Needs a MySQL database ^(local Docker or installed MySQL^).
-echo For Docker local DB: run start-local-db.bat first.
-echo .env.local overrides .env ^(use it for local testing^).
+echo Uses the main HeatWave MySQL database from .env
+echo ^(same data as the cloud app^).
 echo.
 
-if not exist ".env" if not exist ".env.local" (
-  if exist ".env.local.example" (
-    echo Creating .env.local from .env.local.example for local MySQL...
-    copy /Y ".env.local.example" ".env.local" >nul
-  ) else (
-    echo Creating .env from .env.example ...
-    copy /Y ".env.example" ".env" >nul
-    echo.
-    echo IMPORTANT: Open .env and set MYSQL_PASSWORD, then run again.
-    notepad ".env"
-    pause
-    exit /b 1
-  )
+if not exist ".env" (
+  echo Creating .env from .env.example ...
+  copy /Y ".env.example" ".env" >nul
+  echo.
+  echo IMPORTANT: Open .env and set MYSQL_HOST, MYSQL_PASSWORD,
+  echo and other HeatWave values, then run this file again.
+  notepad ".env"
+  pause
+  exit /b 1
 )
 
 if not exist "node_modules" (

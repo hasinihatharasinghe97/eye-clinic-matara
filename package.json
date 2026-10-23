@@ -10,15 +10,11 @@
     "build": "npm run build --prefix client && npm run build --prefix server",
     "build:render": "npm ci && npm ci --prefix server && npm ci --include=dev --prefix client && npm run build --prefix client",
     "export:snapshot": "node scripts/export-mysql-snapshot.mjs",
-    "export:local": "node scripts/run-with-env.mjs .env.clinic-pc scripts/export-mysql-snapshot.mjs",
     "import:heatwave": "node scripts/run-with-env.mjs .env scripts/migrate-sqlite-to-mysql.mjs data/backups/snapshot.json",
     "restore:backup": "node scripts/restore-from-backup.mjs",
     "migrate:mysql": "node scripts/migrate-sqlite-to-mysql.mjs",
     "seed:demo": "node scripts/seed-demo-data.mjs",
-    "seed:demo:clear": "node scripts/seed-demo-data.mjs --clear",
-    "db:local:up": "docker compose up -d",
-    "db:local:down": "docker compose down",
-    "db:local:logs": "docker compose logs -f mysql"
+    "seed:demo:clear": "node scripts/seed-demo-data.mjs --clear"
   },
   "dependencies": {
     "archiver": "^7.0.1"

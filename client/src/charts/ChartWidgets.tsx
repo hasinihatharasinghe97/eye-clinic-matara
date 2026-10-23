@@ -17,7 +17,11 @@ import {
   YAxis,
 } from 'recharts';
 
+import { DISTANCE_SCALE, visionLabel, type VisionScale } from './visionScale';
+
 const COLORS = ['#0f6b4c', '#2a8f6a', '#c47b2b', '#3b6ea5', '#9b2c2c', '#6b5b95', '#5a6b60'];
+/** Line series: the first two (Right / Left) are blue and orange so they differ at a glance. */
+const LINE_COLORS = ['#1f5fbf', '#d9480f', '#0f6b4c', '#9b2c2c', '#6b5b95', '#5a6b60'];
 
 type ChartCardProps = {
   title: string;
@@ -68,11 +72,15 @@ export function StatKpis({
 type Point = { name: string; value: number };
 
 export function SimpleBarChart({ data, color = COLORS[0] }: { data: Point[]; color?: string }) {
+  const slanted = data.length > 6;
+  // Slanted labels need room below the axis for the longest name (capped).
+  const longest = Math.max(0, ...data.map((d) => String(d.name).length));
+  const axisHeight = slanted ? Math.min(110, Math.max(60, 14 + longest * 3.2)) : 30;
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2ddd2" />
-        <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={data.length > 6 ? -25 : 0} textAnchor={data.length > 6 ? 'end' : 'middle'} height={data.length > 6 ? 60 : 30} />
+        <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={slanted ? -25 : 0} textAnchor={slanted ? 'end' : 'middle'} height={axisHeight} />
         <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} />
         <Tooltip />
         <Bar dataKey="value" fill={color} radius={[6, 6, 0, 0]} />
@@ -117,7 +125,51 @@ export function MonthLineChart({
             key={k}
             type="monotone"
             dataKey={k}
-            stroke={COLORS[i % COLORS.length]}
+            stroke={LINE_COLORS[i % LINE_COLORS.length]}
+            strokeWidth={2}
+            dot={{ r: 3 }}
+            connectNulls
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Line chart on a vision scale: best vision at the top, blind at the bottom. */
+export function VisionLineChart({
+  series,
+  scale = DISTANCE_SCALE,
+}: {
+  series: Array<{ month: string; [key: string]: string | number | undefined | null }>;
+  scale?: VisionScale;
+}) {
+  if (!series.length) return null;
+  const keys = Object.keys(series[0] || {}).filter((k) => k !== 'month');
+  const visionTick = (v: number) => visionLabel(scale, v);
+  const ticks = Array.from({ length: scale.max }, (_, i) => i + 1);
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={series} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2ddd2" />
+        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+        <YAxis
+          reversed
+          domain={[1, scale.max]}
+          ticks={ticks}
+          interval={0}
+          tickFormatter={visionTick}
+          tick={{ fontSize: 10 }}
+          width={58}
+        />
+        <Tooltip formatter={(value, name) => [visionTick(Number(value)), name]} />
+        <Legend />
+        {keys.map((k, i) => (
+          <Line
+            key={k}
+            type="monotone"
+            dataKey={k}
+            stroke={LINE_COLORS[i % LINE_COLORS.length]}
             strokeWidth={2}
             dot={{ r: 3 }}
             connectNulls

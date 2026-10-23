@@ -89,7 +89,7 @@ export type Patient = {
   address: string | null;
   phone: string | null;
   conditions?: string[];
-  /** Medicine PDF numbers (1–200) already sent to this patient */
+  /** Medicine PDF numbers (1–500) already sent to this patient */
   medicinesSent?: number[];
   /** Marked as attended the clinic on today's (or requested) date */
   visitedToday?: boolean;
@@ -102,6 +102,10 @@ export type VisionData = {
   near?: { rEye?: string; rPh?: string; lEye?: string; lPh?: string };
   /** Contrast sensitivity score per eye (e.g. 1–10) */
   contrast?: { rEye?: string; lEye?: string };
+  /** Glare test per eye: "+" (positive) or "-" (negative) */
+  glare?: { rEye?: string; lEye?: string };
+  /** Halo test per eye: "+" (positive) or "-" (negative) */
+  halo?: { rEye?: string; lEye?: string };
 };
 
 export type IopData = {
@@ -246,6 +250,9 @@ export type ClinicStats = {
   gender: Array<{ name: string; value: number }>;
   ageBands: Array<{ name: string; value: number }>;
   conditions: Array<{ name: string; value: number }>;
+  /** Patients per disease, from the free-text Diagnosis on screening forms. */
+  diagnoses: Array<{ name: string; value: number }>;
+  patientsWithDiagnosis: number;
   assessmentsByType: Array<{ name: string; value: number }>;
   registrationsByMonth: Array<{ month: string; value: number }>;
   attendanceByMonth: Array<{ month: string; value: number }>;
@@ -262,6 +269,30 @@ export type DailyAttendancePatient = {
   phone: string | null;
   visitDate: string;
   attendedAt: string | null;
+};
+
+export type MonthlyReportPatient = {
+  id: string;
+  name: string;
+  age: number | null;
+  gender: string | null;
+  opdAdNo: string | null;
+  address: string | null;
+  /** Derived from the address text */
+  district: string;
+  ageGroup: string;
+  visitDays: number;
+};
+
+export type MonthlyReport = {
+  month: string;
+  fromDate: string;
+  toDate: string;
+  totals: { patients: number; attendanceDays: number };
+  ageGroups: Array<{ name: string; value: number }>;
+  districts: Array<{ name: string; value: number }>;
+  gender: Array<{ name: string; value: number }>;
+  patients: MonthlyReportPatient[];
 };
 
 export type DailyAttendanceReport = {
@@ -470,6 +501,9 @@ export const api = {
     });
     return request<DailyAttendanceReport>(`/api/stats/daily?${params}`);
   },
+
+  getMonthlyReport: (month: string) =>
+    request<MonthlyReport>(`/api/stats/monthly?month=${encodeURIComponent(month)}`),
 
   getPatientCharts: (patientId: string) =>
     request<PatientCharts>(`/api/patients/${patientId}/charts`),

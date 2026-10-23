@@ -6,12 +6,24 @@ import {
   MetricLineChart,
   MonthLineChart,
   StatKpis,
+  VisionLineChart,
 } from '../charts/ChartWidgets';
+import { DISTANCE_SCALE, NEAR_SCALE, type VisionScale } from '../charts/visionScale';
 import { EmptyState } from '../components/PageNav';
 import { useToast } from '../components/Toast';
 
 type Props = {
   patientId: string;
+};
+
+/** Series plotted on a vision scale (1 = best … 12 = blind). */
+const VISION_SCALES: Record<string, VisionScale> = {
+  visionRight: DISTANCE_SCALE,
+  visionLeft: DISTANCE_SCALE,
+  phRight: DISTANCE_SCALE,
+  phLeft: DISTANCE_SCALE,
+  nearRight: NEAR_SCALE,
+  nearLeft: NEAR_SCALE,
 };
 
 const UNIT: Record<string, string> = {
@@ -26,9 +38,12 @@ const UNIT: Record<string, string> = {
   improvementLeft: '/10',
   visionRight: '',
   visionLeft: '',
+  phRight: '',
+  phLeft: '',
   contrastRight: '/10',
   contrastLeft: '/10',
-  colorVision: '',
+  colorVisionRight: '',
+  colorVisionLeft: '',
   nearRight: '',
   nearLeft: '',
 };
@@ -68,10 +83,13 @@ export function PatientChartsPanel({ patientId }: Props) {
         const preferred = [
           'visionRight',
           'visionLeft',
+          'phRight',
+          'phLeft',
           'contrastRight',
           'iopRight',
           'nearRight',
-          'colorVision',
+          'colorVisionRight',
+          'colorVisionLeft',
           'improvementRight',
           'cmt',
           'iop',
@@ -112,6 +130,10 @@ export function PatientChartsPanel({ patientId }: Props) {
     () => pairSeries(data?.series.visionRight, data?.series.visionLeft),
     [data]
   );
+  const phCompare = useMemo(
+    () => pairSeries(data?.series.phRight, data?.series.phLeft, 'PH Right (R)', 'PH Left (L)'),
+    [data]
+  );
   const contrastCompare = useMemo(
     () => pairSeries(data?.series.contrastRight, data?.series.contrastLeft),
     [data]
@@ -132,14 +154,6 @@ export function PatientChartsPanel({ patientId }: Props) {
     () => pairSeries(data?.series.colorVisionRight, data?.series.colorVisionLeft),
     [data]
   );
-  const colorPoints = useMemo(() => {
-    if (!data) return [];
-    return (data.series.colorVision || []).map((p) => ({
-      date: p.date,
-      value: p.value,
-      label: p.eye || p.source,
-    }));
-  }, [data]);
 
   if (busy) return <p className="muted">Loading improvement charts…</p>;
   if (loadFailed) {
@@ -166,7 +180,7 @@ export function PatientChartsPanel({ patientId }: Props) {
       <div className="card">
         <h3 style={{ marginTop: 0 }}>How to chart improvement</h3>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Record distance vision, near vision, contrast (1–10), color vision, and IOP (R/L) on each{' '}
+          Record distance vision (with pinhole), near vision, contrast (1–10), color vision, and IOP (R/L) on each{' '}
           <strong>screening visit</strong> (Visits tab). Progress-tab scores (0–10) and disease
           assessment numbers (CMT, CSGS, HbA1c, SRF) also appear below.
         </p>
@@ -175,12 +189,23 @@ export function PatientChartsPanel({ patientId }: Props) {
       <div className="stats-grid">
         <ChartCard
           title="Vision improvement"
-          subtitle="Distance VA scored 1–10 from screening visits (higher is better: 6/6 = 10)"
+          subtitle="Distance VA from screening visits (6/6 = 1 best … PL = 11 worst; - = blind)"
           empty={visionCompare.length === 0}
           emptyText="Add distance vision (R/L) on Visits screening forms to see this chart."
         >
           <div className="chart-frame">
-            <MonthLineChart series={visionCompare} />
+            <VisionLineChart series={visionCompare} />
+          </div>
+        </ChartCard>
+
+        <ChartCard
+          title="Pinhole (PH) improvement"
+          subtitle="Distance VA with pinhole — R ph vs L ph (6/6 = 1 best … PL = 11 worst; - = blind)"
+          empty={phCompare.length === 0}
+          emptyText="Add R ph / L ph distance vision on Visits screening forms to see this chart."
+        >
+          <div className="chart-frame">
+            <VisionLineChart series={phCompare} />
           </div>
         </ChartCard>
 
@@ -196,28 +221,24 @@ export function PatientChartsPanel({ patientId }: Props) {
         </ChartCard>
 
         <ChartCard
-          title="Color vision"
-          subtitle="Color vision score (1–30) — Right vs Left from Visits"
-          empty={colorCompare.length === 0 && colorPoints.length === 0}
+          title="Color vision (R vs L)"
+          subtitle="Color vision score (1–30) — Right vs Left"
+          empty={colorCompare.length === 0}
           emptyText="Set R and L color vision on Visits screening forms to see this chart."
         >
           <div className="chart-frame">
-            {colorCompare.length > 0 ? (
-              <MonthLineChart series={colorCompare} />
-            ) : (
-              <MetricLineChart data={colorPoints} />
-            )}
+            <MonthLineChart series={colorCompare} />
           </div>
         </ChartCard>
 
         <ChartCard
           title="Near vision"
-          subtitle="Near acuity from screening visits (higher score = better)"
+          subtitle="Near vision from screening visits (1 = best … 12 = worst; - = blind)"
           empty={nearCompare.length === 0}
           emptyText="Add near vision (R/L) on Visits screening forms to see this chart."
         >
           <div className="chart-frame">
-            <MonthLineChart series={nearCompare} />
+            <VisionLineChart series={nearCompare} scale={NEAR_SCALE} />
           </div>
         </ChartCard>
 
@@ -281,7 +302,14 @@ export function PatientChartsPanel({ patientId }: Props) {
         )}
         {chartPoints.length > 0 && (
           <div className="chart-frame">
-            <MetricLineChart data={chartPoints} unit={UNIT[metric]} />
+            {VISION_SCALES[metric] ? (
+              <VisionLineChart
+                series={chartPoints.map((p) => ({ month: p.date, VA: p.value }))}
+                scale={VISION_SCALES[metric]}
+              />
+            ) : (
+              <MetricLineChart data={chartPoints} unit={UNIT[metric]} />
+            )}
           </div>
         )}
       </ChartCard>

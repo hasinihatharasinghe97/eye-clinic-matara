@@ -4,7 +4,7 @@ import { openWhatsAppChat, toWhatsAppNumber } from '../whatsapp';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
 
-const MEDICINE_MAX = 200;
+const MEDICINE_MAX = 500;
 
 type Props = {
   patient: Patient;
@@ -69,7 +69,7 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
       return;
     }
     if (medicineNo === '') {
-      toast.error('Tap the medicine number (1–200) you will send, then open WhatsApp.');
+      toast.error(`Tap the medicine number (1–${MEDICINE_MAX}) you will send, then open WhatsApp.`);
       return;
     }
     if (alreadySent) {
@@ -102,7 +102,7 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Send medicine on WhatsApp</h3>
       <p className="muted">
-        1) Tap the medicine number you will send (1–200). 2) Tap{' '}
+        1) Tap the medicine number you will send (1–{MEDICINE_MAX}). 2) Tap{' '}
         <strong>Open WhatsApp &amp; mark sent</strong>. 3) In the chat, attach that PDF with the
         paperclip. The number is marked sent when you open WhatsApp (we cannot see which file you
         attach inside WhatsApp).
@@ -129,7 +129,7 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
         </div>
 
         <div className="field">
-          <label>Medicine number to send (1–200)</label>
+          <label>Medicine number to send (1–{MEDICINE_MAX})</label>
           <input
             type="number"
             min={1}
@@ -197,7 +197,7 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
         <p className="muted" style={{ marginTop: 0, fontSize: '0.82rem' }}>
           Filled = already sent. Tap a number to select it, then open WhatsApp.
         </p>
-        <div className="medicine-grid" role="group" aria-label="Medicine numbers 1 to 200">
+        <div className="medicine-grid" role="group" aria-label={`Medicine numbers 1 to ${MEDICINE_MAX}`}>
           {numbers.map((n) => {
             const marked = sentSet.has(n);
             const selected = medicineNo === n;

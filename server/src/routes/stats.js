@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { clinicMonthKey, normalizeClinicDate, toClinicSortableDate } from '../clinicDate.js';
+import { districtFromAddress, UNKNOWN_DISTRICT } from '../districts.js';
 import {
+  AGE_BANDS,
   ageBand,
   buildMonthlyActivity,
   extractAssessmentMetrics,
   extractVisitScreeningMetrics,
   monthKey,
+  parseDiagnoses,
 } from '../analytics.js';
 import { parsePagination, paginationMeta } from '../pagination.js';
 
@@ -119,6 +122,84 @@ router.get('/daily', async (req, res) => {
   }
 });
 
+/** Monthly report: distinct patients who attended in a month, by age group and district (from the address). */
+router.get('/monthly', async (req, res) => {
+  try {
+    const raw = String(req.query.month || '').trim();
+    const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(raw) ? raw : clinicMonthKey();
+    const [y, m] = month.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const fromDate = `${month}-01`;
+    const toDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+    const rows = await db
+      .prepare(
+        `SELECT p.id, p.name, p.age, p.gender, p.opd_ad_no, p.address,
+                COUNT(*) AS visit_days
+         FROM clinic_attendance a
+         JOIN patients p ON p.id = a.patient_id
+         WHERE a.visit_date >= ? AND a.visit_date <= ?
+         GROUP BY p.id, p.name, p.age, p.gender, p.opd_ad_no, p.address
+         ORDER BY p.name ASC`
+      )
+      .all(fromDate, toDate);
+
+    const ageCounts = {};
+    const districtCounts = {};
+    const genderCounts = { Male: 0, Female: 0, 'Other / blank': 0 };
+    let attendanceDays = 0;
+
+    const patients = rows.map((r) => {
+      const band = ageBand(r.age);
+      const district = districtFromAddress(r.address);
+      ageCounts[band] = (ageCounts[band] || 0) + 1;
+      districtCounts[district] = (districtCounts[district] || 0) + 1;
+      const g = String(r.gender || '').toUpperCase();
+      if (g === 'M' || g === 'MALE') genderCounts.Male += 1;
+      else if (g === 'F' || g === 'FEMALE') genderCounts.Female += 1;
+      else genderCounts['Other / blank'] += 1;
+      const visitDays = Number(r.visit_days || 0);
+      attendanceDays += visitDays;
+      return {
+        id: String(r.id),
+        name: r.name || '',
+        age: r.age ?? null,
+        gender: r.gender || null,
+        opdAdNo: r.opd_ad_no || null,
+        address: r.address || null,
+        district,
+        ageGroup: band,
+        visitDays,
+      };
+    });
+
+    res.json({
+      month,
+      fromDate,
+      toDate,
+      totals: { patients: patients.length, attendanceDays },
+      ageGroups: AGE_BANDS.filter((b) => b !== 'Unknown' || ageCounts[b]).map((name) => ({
+        name,
+        value: ageCounts[name] || 0,
+      })),
+      districts: Object.entries(districtCounts)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) =>
+          a.name === UNKNOWN_DISTRICT
+            ? 1
+            : b.name === UNKNOWN_DISTRICT
+              ? -1
+              : b.value - a.value || a.name.localeCompare(b.name)
+        ),
+      gender: Object.entries(genderCounts).map(([name, value]) => ({ name, value })),
+      patients,
+    });
+  } catch (err) {
+    console.error('[stats] monthly failed:', err);
+    res.status(500).json({ error: err.message || 'Could not load monthly report' });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const { fromDate, toDate } = parseOptionalStatsRange(req.query);
@@ -200,6 +281,35 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // Diseases from the free-text Diagnosis on screening forms in the period.
+    // Each patient counts once per diagnosis, however many visits mention it.
+    const visits = await db
+      .prepare(
+        "SELECT patient_id, visit_date, diagnosis FROM visits WHERE diagnosis IS NOT NULL AND diagnosis <> ''"
+      )
+      .all();
+    const diagnosisPatients = new Map(); // key → { label, labels: Map<label, n>, patients: Set }
+    const diagnosedPatients = new Set();
+    for (const v of visits) {
+      if (!dayInRange(toClinicSortableDate(v.visit_date), fromDate, toDate)) continue;
+      for (const d of parseDiagnoses(v.diagnosis)) {
+        if (!diagnosisPatients.has(d.key)) {
+          diagnosisPatients.set(d.key, { labels: new Map(), patients: new Set() });
+        }
+        const entry = diagnosisPatients.get(d.key);
+        entry.labels.set(d.label, (entry.labels.get(d.label) || 0) + 1);
+        entry.patients.add(v.patient_id);
+        diagnosedPatients.add(v.patient_id);
+      }
+    }
+    const diagnoses = [...diagnosisPatients.values()]
+      .map((entry) => ({
+        // Show the spelling used most often for this diagnosis.
+        name: [...entry.labels.entries()].sort((a, b) => b[1] - a[1])[0][0],
+        value: entry.patients.size,
+      }))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+
     const toPairs = (obj) =>
       Object.entries(obj)
         .map(([name, value]) => ({ name, value }))
@@ -227,10 +337,11 @@ router.get('/', async (req, res) => {
         { name: 'Female', value: genderCounts.F },
         { name: 'Other / blank', value: genderCounts.Other },
       ].filter((x) => x.value > 0),
-      ageBands: ['0–17', '18–29', '30–44', '45–59', '60–74', '75+', 'Unknown']
-        .filter((b) => ageBands[b])
-        .map((name) => ({ name, value: ageBands[name] })),
+      ageBands: AGE_BANDS.filter((b) => b !== 'Unknown' || ageBands[b])
+        .map((name) => ({ name, value: ageBands[name] || 0 })),
       conditions: toPairs(conditionCounts),
+      diagnoses,
+      patientsWithDiagnosis: diagnosedPatients.size,
       assessmentsByType: toPairs(assessmentsByType),
       registrationsByMonth: monthSeries(registrationsByMonth),
       attendanceByMonth: monthSeries(attendanceByMonth),
@@ -278,11 +389,12 @@ export async function getPatientCharts(patientId) {
       iopLeft: mergeSeries(extracted.series.iopLeft, visitMetrics.iopLeft),
       visionRight: mergeSeries(extracted.series.visionRight, visitMetrics.visionRight),
       visionLeft: mergeSeries(extracted.series.visionLeft, visitMetrics.visionLeft),
+      phRight: mergeSeries(extracted.series.phRight, visitMetrics.phRight),
+      phLeft: mergeSeries(extracted.series.phLeft, visitMetrics.phLeft),
       contrastRight: mergeSeries(extracted.series.contrastRight, visitMetrics.contrastRight),
       contrastLeft: mergeSeries(extracted.series.contrastLeft, visitMetrics.contrastLeft),
       nearRight: mergeSeries(extracted.series.nearRight, visitMetrics.nearRight),
       nearLeft: mergeSeries(extracted.series.nearLeft, visitMetrics.nearLeft),
-      colorVision: mergeSeries(extracted.series.colorVision, visitMetrics.colorVision),
       colorVisionRight: mergeSeries(extracted.series.colorVisionRight, visitMetrics.colorVisionRight),
       colorVisionLeft: mergeSeries(extracted.series.colorVisionLeft, visitMetrics.colorVisionLeft),
       improvementRight: progress

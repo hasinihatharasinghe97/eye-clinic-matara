@@ -1,6 +1,6 @@
 /**
  * Load a specific env file into process.env, then run another script.
- * Usage: node scripts/run-with-env.mjs .env.clinic-pc scripts/export-mysql-snapshot.mjs
+ * Usage: node scripts/run-with-env.mjs .env scripts/export-mysql-snapshot.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';

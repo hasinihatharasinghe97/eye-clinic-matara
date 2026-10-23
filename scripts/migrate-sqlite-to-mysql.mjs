@@ -78,7 +78,7 @@ if (argPath && argPath.endsWith('.json') && fs.existsSync(argPath)) {
   console.error(
     `No source found. Expected ${dbPath} or pass a snapshot.json path as the first argument.`
   );
-  console.error('Tip: run  npm run export:snapshot  against your local MySQL first.');
+  console.error('Tip: run  npm run export:snapshot  against the source MySQL first.');
   process.exit(1);
 }
 

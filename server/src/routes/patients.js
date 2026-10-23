@@ -24,7 +24,7 @@ function parseConditions(value) {
   }
 }
 
-/** Medicine PDF numbers 1–200 already sent to this patient. */
+/** Medicine PDF numbers 1–500 already sent to this patient. */
 function parseMedicinesSent(value) {
   let list = [];
   if (Array.isArray(value)) list = value;
@@ -39,7 +39,7 @@ function parseMedicinesSent(value) {
   const set = new Set();
   for (const item of list) {
     const n = Number(item);
-    if (Number.isInteger(n) && n >= 1 && n <= 200) set.add(n);
+    if (Number.isInteger(n) && n >= 1 && n <= 500) set.add(n);
   }
   return [...set].sort((a, b) => a - b);
 }

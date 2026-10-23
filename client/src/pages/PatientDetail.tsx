@@ -19,6 +19,7 @@ import { PAGE_SIZE_OPTIONS, Pagination } from '../components/Pagination';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { VisitTodayTick } from '../components/VisitTodayTick';
+import { VisitTimeline } from '../components/VisitTimeline';
 import { DateInput } from '../components/DateInput';
 
 function formatWhen(value: string) {
@@ -77,6 +78,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
   const [listTotal, setListTotal] = useState(0);
   const [tabLoading, setTabLoading] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [visitView, setVisitView] = useState<'list' | 'timeline'>('list');
   const today = localClinicDate();
 
   const active =
@@ -316,6 +319,24 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               Edit details
             </button>
             <button
+              className="btn secondary"
+              type="button"
+              disabled={pdfBusy}
+              onClick={async () => {
+                setPdfBusy(true);
+                try {
+                  const { downloadPatientProfilePdf } = await import('../patientPdf');
+                  await downloadPatientProfilePdf(patient);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Could not create PDF');
+                } finally {
+                  setPdfBusy(false);
+                }
+              }}
+            >
+              {pdfBusy ? 'Preparing PDF…' : 'Download full PDF'}
+            </button>
+            <button
               className="btn danger"
               type="button"
               onClick={async () => {
@@ -405,7 +426,33 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               Add screening form
             </button>
           </div>
-          {tabLoading && visits.length === 0 ? (
+          {listTotal > 0 && (
+            <div className="tabs" role="tablist" aria-label="Screening forms view">
+              {(
+                [
+                  ['list', 'List'],
+                  ['timeline', 'All visits by section'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={visitView === key}
+                  className={visitView === key ? 'active' : ''}
+                  onClick={() => setVisitView(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {listTotal > 0 && visitView === 'timeline' ? (
+            <VisitTimeline
+              patientId={patientId}
+              onEditVisit={(id) => onNavigate(`/patients/${patientId}/visits/${id}/edit`)}
+            />
+          ) : tabLoading && visits.length === 0 ? (
             <LoadingBlock label="Loading visits…" />
           ) : listTotal === 0 ? (
             <EmptyState

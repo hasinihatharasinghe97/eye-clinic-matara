@@ -12,6 +12,8 @@ import { EmptyState, LoadingBlock } from '../components/PageNav';
 import { useToast } from '../components/Toast';
 import { DateInput } from '../components/DateInput';
 
+const MAX_DIAGNOSIS_BARS = 12;
+
 function labelCondition(id: string) {
   return diseaseFormTitle(id);
 }
@@ -85,6 +87,17 @@ export function StatsPage() {
       attendance: att[month] || 0,
       assessments: ass[month] || 0,
     }));
+  }, [stats]);
+
+  // Most common diagnoses as bars; the long tail is grouped so the chart stays readable.
+  const diagnosisBars = useMemo(() => {
+    const all = stats?.diagnoses || [];
+    if (all.length <= MAX_DIAGNOSIS_BARS) return all;
+    const rest = all.slice(MAX_DIAGNOSIS_BARS - 1);
+    return [
+      ...all.slice(0, MAX_DIAGNOSIS_BARS - 1),
+      { name: `Other diagnoses (${rest.length})`, value: rest.reduce((n, d) => n + d.value, 0) },
+    ];
   }, [stats]);
 
   return (
@@ -162,26 +175,28 @@ export function StatsPage() {
               </div>
             </ChartCard>
 
-            <ChartCard title="Age groups" empty={stats.ageBands.length === 0}>
+            <ChartCard
+              title="Age groups"
+              subtitle="Years: 0-15, 16-30, 31-45, 46-60, 61-75, 76 and above"
+              empty={stats.ageBands.every((b) => b.value === 0)}
+            >
               <div className="chart-frame">
                 <SimpleBarChart data={stats.ageBands} />
               </div>
             </ChartCard>
 
             <ChartCard
-              title="Patients by disease form"
-              subtitle="Based on conditions selected on patient records"
-              empty={stats.conditions.length === 0}
-              emptyText="Mark diseases on patient details to see this chart."
+              title="Patients by diagnosis"
+              subtitle={`From the Diagnosis on screening forms${
+                hasPeriod ? ' in this period' : ''
+              } · ${stats.patientsWithDiagnosis} patient${
+                stats.patientsWithDiagnosis === 1 ? '' : 's'
+              } with a diagnosis (a patient can have more than one)`}
+              empty={stats.diagnoses.length === 0}
+              emptyText="Enter a Diagnosis on screening forms to see this chart."
             >
               <div className="chart-frame">
-                <SimpleBarChart
-                  data={stats.conditions.map((c) => ({
-                    name: labelCondition(c.name),
-                    value: c.value,
-                  }))}
-                  color="#3b6ea5"
-                />
+                <SimpleBarChart data={diagnosisBars} color="#3b6ea5" />
               </div>
             </ChartCard>
 

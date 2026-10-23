@@ -5,11 +5,12 @@ import {
   api,
   localClinicDate,
   type DailyAttendancePatient,
+  type MonthlyReport,
 } from '../api';
 import { EmptyState, LoadingBlock } from '../components/PageNav';
 import { PAGE_SIZE_OPTIONS, Pagination } from '../components/Pagination';
 import { useToast } from '../components/Toast';
-import { DateInput } from '../components/DateInput';
+import { DateInput, MonthInput } from '../components/DateInput';
 
 type SortKey = 'visitDate' | 'name' | 'age' | 'opdAdNo' | 'address';
 type SortDir = 'asc' | 'desc';
@@ -106,6 +107,219 @@ function downloadDailyPdf(fromDate: string, toDate: string, rows: DailyAttendanc
   doc.save(file);
 }
 
+function monthLabel(month: string) {
+  const [y, m] = month.split('-').map(Number);
+  if (!y || !m) return month;
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+}
+
+function downloadMonthlyPdf(report: MonthlyReport) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const total = report.totals.patients;
+  const pct = (n: number) => (total ? `${((n / total) * 100).toFixed(1)}%` : '-');
+  const headStyles = { fillColor: [15, 76, 92] as [number, number, number], textColor: 255 };
+  const footer = (data: { pageNumber: number }) => {
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(
+      `Generated ${localClinicDate()} - page ${data.pageNumber}`,
+      14,
+      doc.internal.pageSize.getHeight() - 8
+    );
+    doc.setTextColor(0);
+  };
+  let cursorY = 30;
+  const advance = () => {
+    cursorY =
+      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? cursorY;
+  };
+
+  doc.setFontSize(14);
+  doc.text('Nethraloka Ayurvedic Eye Clinic', 14, 16);
+  doc.setFontSize(11);
+  doc.setTextColor(60);
+  doc.text(`Monthly attendance report - ${monthLabel(report.month)}`, 14, 23);
+  doc.setFontSize(9);
+  doc.text(
+    `Patients attended: ${total}    Attendance days: ${report.totals.attendanceDays}`,
+    14,
+    29
+  );
+  doc.setTextColor(0);
+
+  const section = (title: string, rows: Array<{ name: string; value: number }>, label: string) => {
+    if (cursorY > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage();
+      cursorY = 10;
+    }
+    const y = cursorY + 10;
+    doc.setFontSize(11);
+    doc.text(title, 14, y);
+    autoTable(doc, {
+      startY: y + 3,
+      head: [[label, 'Patients', '% of total']],
+      body: [
+        ...rows.map((r) => [r.name, String(r.value), pct(r.value)]),
+        ['Total', String(rows.reduce((s, r) => s + r.value, 0)), total ? '100%' : '-'],
+      ],
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles,
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+      didParseCell: (data) => {
+        if (data.section === 'head' && data.column.index > 0) data.cell.styles.halign = 'right';
+        if (data.section === 'body' && data.row.index === rows.length) {
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+      didDrawPage: footer,
+    });
+    advance();
+  };
+
+  section('Age groups', report.ageGroups, 'Age group (years)');
+  section('Districts', report.districts, 'District');
+  section('Gender', report.gender, 'Gender');
+
+  if (cursorY > doc.internal.pageSize.getHeight() - 40) {
+    doc.addPage();
+    cursorY = 10;
+  }
+  const y = cursorY + 10;
+  doc.setFontSize(11);
+  doc.text('Patients attended', 14, y);
+  autoTable(doc, {
+    startY: y + 3,
+    head: [['#', 'Patient name', 'Age', 'OPD No', 'Address', 'District', 'Days']],
+    body: report.patients.map((p, i) => [
+      String(i + 1),
+      p.name || '-',
+      p.age != null ? String(p.age) : '-',
+      p.opdAdNo || '-',
+      p.address || '-',
+      p.district,
+      String(p.visitDays),
+    ]),
+    styles: { fontSize: 8.5, cellPadding: 1.8 },
+    headStyles,
+    columnStyles: { 0: { cellWidth: 9 }, 2: { cellWidth: 11 }, 6: { cellWidth: 11, halign: 'right' } },
+    didDrawPage: footer,
+  });
+
+  doc.save(`monthly-report-${report.month}.pdf`);
+}
+
+function MonthlyReportCard() {
+  const toast = useToast();
+  const [month, setMonth] = useState(() => localClinicDate().slice(0, 7));
+  const [report, setReport] = useState<MonthlyReport | null>(null);
+  const [busy, setBusy] = useState(true);
+
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    let cancelled = false;
+    setBusy(true);
+    api
+      .getMonthlyReport(month)
+      .then((r) => {
+        if (!cancelled) setReport(r);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setReport(null);
+        toast.error(err instanceof Error ? err.message : 'Failed to load monthly report');
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [month, toast]);
+
+  const total = report?.totals.patients ?? 0;
+
+  return (
+    <div className="card">
+      <div className="page-toolbar" style={{ marginBottom: '0.5rem' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Monthly report</h3>
+          <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
+            Patients who attended in the month, counted by age group and by district (worked out from the address).
+          </p>
+        </div>
+        <div className="page-toolbar-actions">
+          <label className="daily-date-field">
+            <span className="muted">Month</span>
+            <MonthInput value={month} max={localClinicDate().slice(0, 7)} onChange={setMonth} />
+          </label>
+          <button
+            className="btn"
+            type="button"
+            disabled={busy || !report || total === 0}
+            onClick={() => report && downloadMonthlyPdf(report)}
+          >
+            Download monthly PDF
+          </button>
+        </div>
+      </div>
+
+      {busy ? (
+        <LoadingBlock label="Loading monthly report…" />
+      ) : !report || total === 0 ? (
+        <EmptyState
+          title="No attendance this month"
+          hint={`Nobody was marked Visited in ${monthLabel(month)}.`}
+        />
+      ) : (
+        <>
+          <p style={{ margin: '0 0 0.75rem' }}>
+            <strong>{monthLabel(report.month)}</strong> · {total} patients ·{' '}
+            {report.totals.attendanceDays} attendance days
+          </p>
+          <div className="grid-2">
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Age group</th>
+                    <th style={{ textAlign: 'right' }}>Patients</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.ageGroups.map((g) => (
+                    <tr key={g.name}>
+                      <td>{g.name}</td>
+                      <td style={{ textAlign: 'right' }}>{g.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>District</th>
+                    <th style={{ textAlign: 'right' }}>Patients</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.districts.map((d) => (
+                    <tr key={d.name}>
+                      <td>{d.name}</td>
+                      <td style={{ textAlign: 'right' }}>{d.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 async function fetchAllAttendanceRows(
   rangeFrom: string,
   rangeTo: string,
@@ -136,7 +350,7 @@ async function fetchAllAttendanceRows(
   return all;
 }
 
-export function DailyReportPage() {
+function DailyReport() {
   const toast = useToast();
   const today = localClinicDate();
   const [fromDate, setFromDate] = useState(today);
@@ -342,6 +556,36 @@ export function DailyReportPage() {
           />
         </div>
       )}
+    </>
+  );
+}
+
+type ReportMode = 'daily' | 'monthly';
+
+export function DailyReportPage() {
+  const [mode, setMode] = useState<ReportMode>('daily');
+  return (
+    <>
+      <div className="tabs" role="tablist" aria-label="Report type">
+        {(
+          [
+            ['daily', 'Daily report'],
+            ['monthly', 'Monthly report'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={mode === key}
+            className={mode === key ? 'active' : ''}
+            onClick={() => setMode(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === 'daily' ? <DailyReport /> : <MonthlyReportCard />}
     </>
   );
 }

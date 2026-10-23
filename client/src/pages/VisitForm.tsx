@@ -13,6 +13,7 @@ import {
 import { emptyVisualField, VisualFieldMarker } from '../components/VisualFieldMarker';
 import { useToast } from '../components/Toast';
 import { DateInput } from '../components/DateInput';
+import { plusMinusLabel } from '../visitSummary';
 
 type Props = {
   patientId: string;
@@ -22,10 +23,13 @@ type Props = {
   onCancel: () => void;
 };
 
+/** Worst to best. "-" means the eye is blind. */
 const DISTANCE_OPTIONS = [
-  'CFS',
-  'HM',
+  '-',
   'PL',
+  'HM',
+  'CFS',
+  '3/60',
   '6/60',
   '6/36',
   '6/24',
@@ -35,9 +39,20 @@ const DISTANCE_OPTIONS = [
   '6/6',
 ];
 
-const NEAR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+/** "-" = blind, then 1 (best) to 12 (worst). */
+const NEAR_OPTIONS = ['-', ...Array.from({ length: 12 }, (_, i) => String(i + 1))];
+const EYE_KEYS = ['rEye', 'rPh', 'lEye', 'lPh'] as const;
+
+/** Distance and near vision have no blank choice: an unset eye shows and saves as "-". */
+function withVisionDefaults(vision: VisionData): VisionData {
+  const fill = (row: VisionData['distance'] = {}) =>
+    Object.fromEntries(EYE_KEYS.map((k) => [k, row[k] || '-']));
+  return { ...vision, distance: fill(vision.distance), near: fill(vision.near) };
+}
 const COLOR_VISION_OPTIONS = Array.from({ length: 30 }, (_, i) => String(i + 1));
 const CONTRAST_OPTIONS = Array.from({ length: 10 }, (_, i) => String(i + 1));
+/** Glare / halo test result: + (positive) or - (negative). */
+const PLUS_MINUS_OPTIONS = ['+', '-'];
 
 function parseVisualField(raw: Visit['visualField']): VisualFieldData {
   if (!raw) return emptyVisualField();
@@ -119,7 +134,7 @@ const blank = (): FormState => ({
   ocOther: '',
   familyHistory: '',
   examExternal: {},
-  vision: { distance: {}, near: {}, contrast: {} },
+  vision: withVisionDefaults({ distance: {}, near: {}, contrast: {}, glare: {}, halo: {} }),
   inspection: {},
   slitLamp: {},
   cataract: {},
@@ -137,21 +152,26 @@ function SelectField({
   options,
   onChange,
   allowEmpty,
+  emptyLabel = '-',
+  optionLabel,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (v: string) => void;
   allowEmpty?: boolean;
+  /** Text for the blank choice (needed where "-" is itself a value). */
+  emptyLabel?: string;
+  optionLabel?: (opt: string) => string;
 }) {
   return (
     <div className="field">
       <label>{label}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {allowEmpty !== false && <option value="">-</option>}
+        {allowEmpty !== false && <option value="">{emptyLabel}</option>}
         {options.map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {optionLabel ? optionLabel(opt) : opt}
           </option>
         ))}
       </select>
@@ -173,11 +193,14 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
         ocOther: v.ocOther || '',
         familyHistory: v.familyHistory || '',
         examExternal: v.examExternal || {},
-        vision: {
+        vision: withVisionDefaults({
+          ...v.vision,
           distance: v.vision?.distance || {},
           near: v.vision?.near || {},
           contrast: v.vision?.contrast || {},
-        },
+          glare: v.vision?.glare || {},
+          halo: v.vision?.halo || {},
+        }),
         inspection: v.inspection || {},
         slitLamp: v.slitLamp || {},
         cataract: v.cataract || {},
@@ -308,6 +331,8 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
             label={label}
             value={form.vision.distance?.[key] || ''}
             options={DISTANCE_OPTIONS}
+            allowEmpty={false}
+            optionLabel={(opt) => (opt === '-' ? '- (blind)' : opt)}
             onChange={(v) =>
               setForm((f) => ({
                 ...f,
@@ -336,6 +361,8 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
             label={label}
             value={form.vision.near?.[key] || ''}
             options={NEAR_OPTIONS}
+            allowEmpty={false}
+            optionLabel={(opt) => (opt === '-' ? '- (blind)' : opt)}
             onChange={(v) =>
               setForm((f) => ({
                 ...f,
@@ -390,6 +417,36 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
                 vision: {
                   ...f.vision,
                   contrast: { ...f.vision.contrast, [key]: v },
+                },
+              }))
+            }
+          />
+        ))}
+      </div>
+
+      <h3 className="section-title">Glare and halo tests</h3>
+      <div className="grid-4">
+        {(
+          [
+            ['glare', 'rEye', 'Glare test - R-Eye'],
+            ['glare', 'lEye', 'Glare test - L-Eye'],
+            ['halo', 'rEye', 'Halo test - R-Eye'],
+            ['halo', 'lEye', 'Halo test - L-Eye'],
+          ] as const
+        ).map(([test, eye, label]) => (
+          <SelectField
+            key={`${test}-${eye}`}
+            label={label}
+            value={form.vision[test]?.[eye] || ''}
+            options={PLUS_MINUS_OPTIONS}
+            emptyLabel="Not tested"
+            optionLabel={plusMinusLabel}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                vision: {
+                  ...f.vision,
+                  [test]: { ...f.vision[test], [eye]: v },
                 },
               }))
             }

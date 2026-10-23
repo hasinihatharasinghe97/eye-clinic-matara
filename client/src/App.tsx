@@ -191,7 +191,7 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
     case 'stats':
       return { crumbs: [patients, { label: 'Clinic stats' }], backTo: '/' };
     case 'daily':
-      return { crumbs: [patients, { label: 'Daily attendance' }], backTo: '/' };
+      return { crumbs: [patients, { label: 'Daily & monthly report' }], backTo: '/' };
     case 'backup':
       return { crumbs: [patients, { label: 'Backup & Settings' }], backTo: '/' };
     case 'forms':
@@ -743,7 +743,7 @@ export default function App() {
               navigate('/daily');
             }}
           >
-            Daily report
+            Daily & monthly report
           </a>
           <a
             href="#/stats"

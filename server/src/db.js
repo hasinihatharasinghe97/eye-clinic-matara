@@ -6,11 +6,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
-/** Load KEY=VALUE pairs from a .env file into process.env.
- * @param {string} filePath
- * @param {{ override?: boolean }} [opts]  When override=true, replace existing values (for .env.local).
- */
-function loadEnvFile(filePath, opts = {}) {
+/** Load KEY=VALUE pairs from a .env file into process.env. */
+function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return false;
   // Strip UTF-8 BOM if Notepad/Windows saved one
   let text = fs.readFileSync(filePath, 'utf8');
@@ -30,7 +27,7 @@ function loadEnvFile(filePath, opts = {}) {
       value = value.slice(1, -1);
     }
     const empty = process.env[key] === undefined || process.env[key] === '';
-    if (opts.override || empty) {
+    if (empty) {
       process.env[key] = value;
       loaded += 1;
     }
@@ -39,14 +36,8 @@ function loadEnvFile(filePath, opts = {}) {
 }
 
 const envPath = path.join(PROJECT_ROOT, '.env');
-const envLocalPath = path.join(PROJECT_ROOT, '.env.local');
-// Load .env first, then .env.local so local MySQL can override HeatWave settings.
-const loadedBase = loadEnvFile(envPath);
-const loadedLocal = loadEnvFile(envLocalPath, { override: true });
-if (!loadedBase && !loadedLocal && !fs.existsSync(envPath) && !fs.existsSync(envLocalPath)) {
-  console.warn(`No .env or .env.local found at ${PROJECT_ROOT}`);
-} else if (fs.existsSync(envLocalPath)) {
-  console.log('[db] Using .env.local overrides (local database)');
+if (!loadEnvFile(envPath) && !fs.existsSync(envPath)) {
+  console.warn(`No .env found at ${PROJECT_ROOT}`);
 }
 
 const defaultDataDir = path.resolve(PROJECT_ROOT, 'data');
@@ -83,7 +74,7 @@ if (!MYSQL_PASSWORD) {
 
 /**
  * When true, uploads and ZIP backups are stored in MySQL (needed on hosts with
- * ephemeral disks such as Render). Local clinic PCs keep files on disk.
+ * ephemeral disks such as Render, and for the shared HeatWave database).
  */
 export const IS_CLOUD =
   process.env.STORE_FILES_IN_DB === '1' ||
