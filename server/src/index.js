@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { db, UPLOADS_DIR, getSettings, IS_CLOUD, readUploadFile } from './db.js';
 import { startDailyBackupScheduler } from './backup.js';
+import { requireAuth } from './auth.js';
 import patientsRouter from './routes/patients.js';
 import visitsRouter from './routes/visits.js';
 import progressRouter from './routes/progress.js';
@@ -21,6 +22,7 @@ const PORT = Number(process.env.PORT) || 3001;
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+app.use(requireAuth);
 
 app.use('/uploads', async (req, res, next) => {
   try {

@@ -9,8 +9,34 @@ export function setToken(token: string | null) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Token format from the server: `<expiresAtMs>.<nonce>.<signature>` */
 export function isLoggedIn(): boolean {
-  return getToken() === 'local-clinic';
+  const expiresAt = Number(getToken()?.split('.')[0]);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
+
+/** Fired when the server rejects the stored token; App shows the login screen. */
+export const AUTH_EXPIRED_EVENT = 'eye-clinic-auth-expired';
+
+function authHeaders(headers?: HeadersInit): Headers {
+  const h = new Headers(headers);
+  const token = getToken();
+  if (token) h.set('Authorization', `Bearer ${token}`);
+  return h;
+}
+
+function handleUnauthorized(res: Response) {
+  if (res.status === 401 && getToken()) {
+    setToken(null);
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
+}
+
+/** For <img src>, <a href> and downloads, which can't send an Authorization header. */
+export function withAuth(url: string): string {
+  const token = getToken();
+  if (!token) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`;
 }
 
 /** Local calendar date YYYY-MM-DD in the clinic timezone (Asia/Colombo).
@@ -30,7 +56,12 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, {
+      ...options,
+      headers: authHeaders(options.headers),
+      signal: controller.signal,
+    });
+    handleUnauthorized(res);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || res.statusText || 'Request failed');
     return data as T;
@@ -357,7 +388,8 @@ export const api = {
 
   listBackups: () => request<BackupInfo[]>('/api/system/backups'),
 
-  backupDownloadUrl: (id: string) => `/api/system/backups/${encodeURIComponent(id)}/download`,
+  backupDownloadUrl: (id: string) =>
+    withAuth(`/api/system/backups/${encodeURIComponent(id)}/download`),
 
   listPatients: (q = '', onDate?: string, page = 1, pageSize = 10) => {
     const params = new URLSearchParams();
@@ -535,8 +567,10 @@ export const api = {
     if (visitId) form.append('visitId', visitId);
     const res = await fetch(`/api/patients/${patientId}/attachments`, {
       method: 'POST',
+      headers: authHeaders(),
       body: form,
     });
+    handleUnauthorized(res);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Upload failed');
     return data as Attachment;

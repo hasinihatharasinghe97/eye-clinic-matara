@@ -12,6 +12,7 @@ import {
   isBackupStale,
   runGoogleDriveBackupNow,
 } from '../backup.js';
+import { clearAuthKeyCache, issueToken, passwordMatches } from '../auth.js';
 import { driveBackupStatus, isGoogleDriveConfigured } from '../googleDriveBackup.js';
 
 const router = Router();
@@ -52,16 +53,18 @@ router.put('/settings', async (req, res) => {
     patch.clinicPassword = body.clinicPassword;
   }
   const next = await saveSettings(patch);
+  if (patch.clinicPassword) clearAuthKeyCache();
   res.json(settingsPayload(next));
 });
 
 router.post('/login', async (req, res) => {
   const password = String(req.body?.password || '');
   const settings = await getSettings();
-  if (password !== settings.clinicPassword) {
+  if (!passwordMatches(password, settings.clinicPassword)) {
     return res.status(401).json({ error: 'Incorrect password' });
   }
-  res.json({ ok: true, token: 'local-clinic' });
+  const { token, expiresAt } = await issueToken();
+  res.json({ ok: true, token, expiresAt });
 });
 
 router.post('/backup', async (_req, res) => {

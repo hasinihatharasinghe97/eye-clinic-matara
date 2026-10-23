@@ -7,6 +7,7 @@ import {
   type Patient,
   type ProgressLog,
   type Visit,
+  withAuth,
 } from '../api';
 import { diseaseFormTitle } from '../diseaseForms/catalog';
 import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
@@ -803,8 +804,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               {files.map((f) => (
                 <div className="gallery-item" key={f.id}>
                   {f.mimeType?.startsWith('image/') ? (
-                    <a href={f.url} target="_blank" rel="noreferrer">
-                      <img src={f.url} alt={f.originalName} />
+                    <a href={withAuth(f.url)} target="_blank" rel="noreferrer">
+                      <img src={withAuth(f.url)} alt={f.originalName} />
                     </a>
                   ) : (
                     <div
@@ -815,7 +816,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                         background: '#eee',
                       }}
                     >
-                      <a href={f.url} target="_blank" rel="noreferrer">
+                      <a href={withAuth(f.url)} target="_blank" rel="noreferrer">
                         PDF
                       </a>
                     </div>

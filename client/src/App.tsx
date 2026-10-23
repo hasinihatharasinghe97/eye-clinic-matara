@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   api,
+  AUTH_EXPIRED_EVENT,
   isLoggedIn,
   localClinicDate,
   setToken,
@@ -626,6 +627,12 @@ export default function App() {
   const [patientName, setPatientName] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const patientId = routePatientId(route);
+
+  useEffect(() => {
+    const onExpired = () => setAuthed(false);
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
 
   useEffect(() => {
     const onHash = () => {

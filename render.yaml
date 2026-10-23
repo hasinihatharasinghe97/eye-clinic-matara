@@ -13,6 +13,8 @@ services:
         value: "22"
       - key: CLINIC_PASSWORD
         generateValue: true
+      - key: AUTH_SECRET
+        generateValue: true
       - key: STORE_FILES_IN_DB
         value: "1"
       - key: MYSQL_SSL
