@@ -67,6 +67,11 @@ router.post('/login', async (req, res) => {
   res.json({ ok: true, token, expiresAt });
 });
 
+/** Only reachable with a valid token (requireAuth); the client calls it on startup. */
+router.get('/session', (_req, res) => {
+  res.json({ ok: true });
+});
+
 router.post('/backup', async (_req, res) => {
   try {
     const result = await createBackup({ persist: true });

@@ -361,6 +361,8 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
 
+  checkSession: () => request<{ ok: boolean }>('/api/system/session'),
+
   getSettings: () => request<SystemSettings>('/api/system/settings'),
 
   updateSettings: (body: { backupFolder?: string; clinicPassword?: string }) =>

@@ -622,14 +622,32 @@ function Dashboard() {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(isLoggedIn());
+  // A stored token is only trusted after the server accepts it, so a stale or
+  // tampered token never shows anything but the login screen.
+  const [auth, setAuth] = useState<'checking' | 'in' | 'out'>(() =>
+    isLoggedIn() ? 'checking' : 'out'
+  );
+  const authed = auth === 'in';
+  const setAuthed = (ok: boolean) => setAuth(ok ? 'in' : 'out');
   const [route, setRoute] = useState<Route>(parseRoute);
   const [patientName, setPatientName] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const patientId = routePatientId(route);
 
   useEffect(() => {
-    const onExpired = () => setAuthed(false);
+    if (auth !== 'checking') return;
+    let cancelled = false;
+    api
+      .checkSession()
+      .then(() => !cancelled && setAuth('in'))
+      .catch(() => !cancelled && setAuth('out'));
+    return () => {
+      cancelled = true;
+    };
+  }, [auth]);
+
+  useEffect(() => {
+    const onExpired = () => setAuth('out');
     window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
   }, []);
@@ -646,7 +664,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!patientId) {
+    if (!patientId || !authed) {
       setPatientName(null);
       return;
     }
@@ -662,9 +680,17 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [patientId]);
+  }, [patientId, authed]);
 
   const nav = useMemo(() => buildCrumbs(route, patientName), [route, patientName]);
+
+  if (auth === 'checking') {
+    return (
+      <div className="login-wrap">
+        <LoadingBlock label="Checking sign-in…" />
+      </div>
+    );
+  }
 
   if (!authed) {
     return <LoginScreen onLogin={() => setAuthed(true)} />;
