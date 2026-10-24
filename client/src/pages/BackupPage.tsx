@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type SystemSettings, type BackupInfo } from '../api';
 import { useToast } from '../components/Toast';
+import { CloudSyncCard } from '../components/CloudSyncCard';
 
 function formatSize(n?: number) {
   if (n == null) return '';
@@ -90,6 +91,7 @@ export function BackupPage() {
 
   return (
     <>
+      {settings?.cloudSync && <CloudSyncCard />}
       <div className="card">
         <h2>Backup &amp; Settings</h2>
         {cloud ? (

@@ -363,6 +363,10 @@ export type SystemSettings = {
   lastBackupAt: string | null;
   hasPassword: boolean;
   cloudMode?: boolean;
+  /** Online copy that only mirrors the clinic laptop; edits are refused. */
+  readOnly?: boolean;
+  /** This server is the clinic laptop and can sync to the cloud database. */
+  cloudSync?: boolean;
   defaultBackupFolder?: string;
   backupOverdue?: boolean;
   backupKeepCount?: number;
@@ -376,6 +380,32 @@ export type SystemSettings = {
     lastDriveError: string | null;
   };
 };
+
+export type CloudSyncResult = {
+  ok: boolean;
+  direction: 'push' | 'pull';
+  startedAt: string;
+  finishedAt: string;
+  error?: string;
+  /** The cloud was changed online (or never synced); a forced sync would overwrite it. */
+  conflict?: boolean;
+  forced?: boolean;
+  tables?: Record<string, { written: number; deleted: number }>;
+  files?: { uploaded?: number; deleted?: number; downloaded?: number; missingOnDisk?: string[] };
+};
+
+export type CloudSyncStatus =
+  | { configured: false }
+  | {
+      configured: true;
+      running: boolean;
+      operation: string | null;
+      progress: string;
+      lastPushAt: string | null;
+      lastPullAt: string | null;
+      lastResult: CloudSyncResult | null;
+      pending: { neverSynced?: boolean; changedTables?: string[]; error?: string } | null;
+    };
 
 export type BackupInfo = {
   id: string;
@@ -395,6 +425,15 @@ export const api = {
   checkSession: () => request<{ ok: boolean }>('/api/system/session'),
 
   getSettings: () => request<SystemSettings>('/api/system/settings'),
+
+  getCloudSync: () => request<CloudSyncStatus>('/api/system/cloud-sync'),
+
+  startCloudSync: (force = false) =>
+    request<{ started: boolean }>('/api/system/cloud-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
+    }),
 
   updateSettings: (body: { backupFolder?: string; clinicPassword?: string }) =>
     request<SystemSettings>('/api/system/settings', {

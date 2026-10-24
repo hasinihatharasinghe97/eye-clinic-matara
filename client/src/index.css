@@ -753,6 +753,21 @@ textarea {
   margin: 0.5rem 0;
 }
 
+.warn-text {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.info-banner {
+  background: var(--accent-soft);
+  border: 1px solid #b9dccb;
+  color: var(--accent);
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
 .warn-banner {
   background: #fff6e5;
   border: 1px solid #e7c97a;

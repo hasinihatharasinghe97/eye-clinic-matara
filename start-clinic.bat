@@ -12,8 +12,8 @@ if errorlevel 1 (
 
 echo Project folder: %cd%
 echo.
-echo Uses the main HeatWave MySQL database from .env
-echo ^(same data as the cloud app^).
+echo Uses the MySQL database set in .env
+echo ^(clinic laptop: its own database - sync to cloud from Backup ^& Settings^).
 echo.
 
 if not exist ".env" (

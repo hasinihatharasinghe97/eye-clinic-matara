@@ -14,6 +14,14 @@ import {
 } from '../backup.js';
 import { clearAuthKeyCache, issueToken, passwordMatches } from '../auth.js';
 import { driveBackupStatus, isGoogleDriveConfigured } from '../googleDriveBackup.js';
+import {
+  cloudSyncStatus,
+  isCloudSyncConfigured,
+  localChangesSinceSync,
+  pushToCloud,
+  readSyncState,
+} from '../cloudSync.js';
+import { isReadOnly } from '../readOnly.js';
 
 const router = Router();
 
@@ -23,6 +31,10 @@ function settingsPayload(s) {
     lastBackupAt: s.lastBackupAt,
     hasPassword: Boolean(s.clinicPassword),
     cloudMode: IS_CLOUD,
+    /** Online copy that only mirrors the clinic laptop; edits are blocked. */
+    readOnly: isReadOnly(),
+    /** This server is the clinic laptop and can sync to the cloud database. */
+    cloudSync: isCloudSyncConfigured(),
     defaultBackupFolder: BACKUPS_DIR,
     backupOverdue: isBackupStale(s.lastBackupAt),
     backupKeepCount: Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14,
@@ -125,6 +137,40 @@ router.post('/cron/drive-backup', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message || 'Google Drive upload failed' });
   }
+});
+
+/** Laptop → cloud sync status: last sync, what changed since, and any sync in progress. */
+router.get('/cloud-sync', async (_req, res) => {
+  if (!isCloudSyncConfigured()) return res.json({ configured: false });
+  const state = readSyncState();
+  let pending = null;
+  try {
+    pending = await localChangesSinceSync();
+  } catch (err) {
+    pending = { error: err.message };
+  }
+  res.json({
+    configured: true,
+    ...cloudSyncStatus(),
+    lastPushAt: state.lastPushAt || null,
+    lastPullAt: state.lastPullAt || null,
+    lastResult: state.lastResult || null,
+    pending,
+  });
+});
+
+/** Start a laptop → cloud sync in the background; poll GET /cloud-sync for the result. */
+router.post('/cloud-sync', (req, res) => {
+  if (!isCloudSyncConfigured()) {
+    return res.status(400).json({ error: 'Cloud sync is not set up on this computer.' });
+  }
+  if (cloudSyncStatus().running) {
+    return res.status(409).json({ error: 'A sync is already running.' });
+  }
+  const force = Boolean(req.body?.force);
+  // Errors are saved in the sync state and shown by GET /cloud-sync.
+  pushToCloud({ force }).catch((err) => console.error('[cloud-sync]', err.message));
+  res.status(202).json({ started: true });
 });
 
 router.get('/backups', async (_req, res) => {

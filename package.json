@@ -12,6 +12,9 @@
     "export:snapshot": "node scripts/export-mysql-snapshot.mjs",
     "import:heatwave": "node scripts/run-with-env.mjs .env scripts/migrate-sqlite-to-mysql.mjs data/backups/snapshot.json",
     "restore:backup": "node scripts/restore-from-backup.mjs",
+    "cloud:push": "node scripts/cloud-sync.mjs push",
+    "cloud:pull": "node scripts/cloud-sync.mjs pull",
+    "cloud:status": "node scripts/cloud-sync.mjs status",
     "migrate:mysql": "node scripts/migrate-sqlite-to-mysql.mjs",
     "seed:demo": "node scripts/seed-demo-data.mjs",
     "seed:demo:clear": "node scripts/seed-demo-data.mjs --clear"

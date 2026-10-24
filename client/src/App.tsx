@@ -345,6 +345,24 @@ function Dashboard() {
     }
   }
 
+  // On the clinic laptop: remind the doctor when today's work hasn't reached the cloud yet.
+  const [unsyncedTables, setUnsyncedTables] = useState<string[]>([]);
+  useEffect(() => {
+    if (!settings?.cloudSync) return;
+    let cancelled = false;
+    api
+      .getCloudSync()
+      .then((s) => {
+        if (!cancelled && s.configured) setUnsyncedTables(s.pending?.changedTables || []);
+      })
+      .catch(() => {
+        /* reminder only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [settings?.cloudSync]);
+
   const backupStale = useMemo(() => {
     if (!settings) return false;
     if (!settings.lastBackupAt) return true;
@@ -354,6 +372,21 @@ function Dashboard() {
 
   return (
     <>
+      {settings?.readOnly && (
+        <div className="info-banner">
+          This online copy is <strong>view-only</strong>. Patients and visits are added on the
+          clinic laptop and appear here after the laptop syncs.
+        </div>
+      )}
+      {unsyncedTables.length > 0 && (
+        <div className="warn-banner">
+          Today’s work on this laptop is not in the online app yet. When you have internet,{' '}
+          <a href="#/backup" onClick={(e) => { e.preventDefault(); navigate('/backup'); }}>
+            sync to cloud
+          </a>
+          .
+        </div>
+      )}
       {backupStale && (
         <div className="warn-banner">
           {settings?.lastBackupAt
