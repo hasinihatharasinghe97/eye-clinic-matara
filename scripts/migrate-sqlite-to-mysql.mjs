@@ -1,6 +1,6 @@
 /**
  * Import into MySQL from:
- *   - a snapshot.json (from `npm run export:snapshot` or Backup ZIP), or
+ *   - a snapshot.json (from a Backup ZIP; used by scripts/restore-from-backup.mjs), or
  *   - legacy local SQLite data/patients.db
  *
  * IDs are remapped to MySQL AUTO_INCREMENT integers.
@@ -78,7 +78,7 @@ if (argPath && argPath.endsWith('.json') && fs.existsSync(argPath)) {
   console.error(
     `No source found. Expected ${dbPath} or pass a snapshot.json path as the first argument.`
   );
-  console.error('Tip: run  npm run export:snapshot  against the source MySQL first.');
+  console.error('Tip: pass the snapshot.json from a Backup ZIP (or use scripts/restore-from-backup.mjs).');
   process.exit(1);
 }
 

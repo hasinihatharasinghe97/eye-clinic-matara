@@ -15,13 +15,13 @@ import {
 import { clearAuthKeyCache, issueToken, passwordMatches } from '../auth.js';
 import { driveBackupStatus, isGoogleDriveConfigured } from '../googleDriveBackup.js';
 import {
+  autoSyncSettings,
   cloudSyncStatus,
   isCloudSyncConfigured,
   localChangesSinceSync,
-  pushToCloud,
+  syncBoth,
   readSyncState,
 } from '../cloudSync.js';
-import { isReadOnly } from '../readOnly.js';
 
 const router = Router();
 
@@ -31,8 +31,6 @@ function settingsPayload(s) {
     lastBackupAt: s.lastBackupAt,
     hasPassword: Boolean(s.clinicPassword),
     cloudMode: IS_CLOUD,
-    /** Online copy that only mirrors the clinic laptop; edits are blocked. */
-    readOnly: isReadOnly(),
     /** This server is the clinic laptop and can sync to the cloud database. */
     cloudSync: isCloudSyncConfigured(),
     defaultBackupFolder: BACKUPS_DIR,
@@ -139,7 +137,7 @@ router.post('/cron/drive-backup', async (req, res) => {
   }
 });
 
-/** Laptop → cloud sync status: last sync, what changed since, and any sync in progress. */
+/** Laptop ↔ cloud sync status: last sync, laptop changes not yet synced, any sync running. */
 router.get('/cloud-sync', async (_req, res) => {
   if (!isCloudSyncConfigured()) return res.json({ configured: false });
   const state = readSyncState();
@@ -152,14 +150,21 @@ router.get('/cloud-sync', async (_req, res) => {
   res.json({
     configured: true,
     ...cloudSyncStatus(),
-    lastPushAt: state.lastPushAt || null,
-    lastPullAt: state.lastPullAt || null,
+    lastSyncAt: state.lastSyncAt || null,
     lastResult: state.lastResult || null,
     pending,
+    auto: {
+      ...autoSyncSettings(),
+      lastCheckAt: state.auto?.lastCheckAt || null,
+      outcome: state.auto?.outcome || null,
+      message: state.auto?.message || null,
+      /** Set when a sync stopped to protect data; automatic sync waits for the doctor. */
+      blocked: state.autoBlocked || null,
+    },
   });
 });
 
-/** Start a laptop → cloud sync in the background; poll GET /cloud-sync for the result. */
+/** Start a two-way sync in the background; poll GET /cloud-sync for the result. */
 router.post('/cloud-sync', (req, res) => {
   if (!isCloudSyncConfigured()) {
     return res.status(400).json({ error: 'Cloud sync is not set up on this computer.' });
@@ -169,7 +174,7 @@ router.post('/cloud-sync', (req, res) => {
   }
   const force = Boolean(req.body?.force);
   // Errors are saved in the sync state and shown by GET /cloud-sync.
-  pushToCloud({ force }).catch((err) => console.error('[cloud-sync]', err.message));
+  syncBoth({ force }).catch((err) => console.error('[cloud-sync]', err.message));
   res.status(202).json({ started: true });
 });
 

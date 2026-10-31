@@ -45,8 +45,6 @@ export const DATA_DIR = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : defaultDataDir;
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-/** @deprecated Kept for backup script compatibility; MySQL replaces the SQLite file. */
-export const DB_PATH = path.join(DATA_DIR, 'patients.db');
 export const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 
@@ -141,6 +139,25 @@ const pool = mysql.createPool({
   dateStrings: true,
   timezone: '+05:30',
   ssl: mysqlSslOption,
+});
+
+/**
+ * Record numbers (AUTO_INCREMENT ids) never clash between the cloud and the offline
+ * clinic laptop, which create records independently and sync both ways: servers on the
+ * cloud database hand out odd ids, the laptop (it has CLOUD_MYSQL_* set) even ids.
+ * Override with ID_STEP / ID_OFFSET; ID_STEP=1 restores plain 1, 2, 3 … numbering.
+ */
+export const ID_STEP = Number(process.env.ID_STEP) || 2;
+export const ID_OFFSET =
+  Number(process.env.ID_OFFSET) || (String(process.env.CLOUD_MYSQL_HOST || '').trim() ? 2 : 1);
+
+pool.on('connection', (conn) => {
+  conn.query(
+    `SET SESSION auto_increment_increment = ${ID_STEP}, auto_increment_offset = ${ID_OFFSET}`,
+    (err) => {
+      if (err) console.warn('[db] Could not set record-number scheme:', err.message);
+    }
+  );
 });
 
 function prepare(sql) {

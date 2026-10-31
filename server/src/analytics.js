@@ -204,10 +204,6 @@ export function extractAssessmentMetrics(assessments) {
   return { metrics: METRIC_KEYS, series };
 }
 
-/** @deprecated Prefer extractVisitScreeningMetrics */
-export function extractVisitIop(visits) {
-  return extractVisitScreeningMetrics(visits).iopCombined;
-}
 
 /**
  * Extract screening-visit chart series: VA, pinhole VA, contrast, near, color, IOP R/L.

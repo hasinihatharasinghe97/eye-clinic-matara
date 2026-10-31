@@ -365,8 +365,6 @@ export type SystemSettings = {
   lastBackupAt: string | null;
   hasPassword: boolean;
   cloudMode?: boolean;
-  /** Online copy that only mirrors the clinic laptop; edits are refused. */
-  readOnly?: boolean;
   /** This server is the clinic laptop and can sync to the cloud database. */
   cloudSync?: boolean;
   defaultBackupFolder?: string;
@@ -385,15 +383,30 @@ export type SystemSettings = {
 
 export type CloudSyncResult = {
   ok: boolean;
-  direction: 'push' | 'pull';
+  /** both = normal two-way sync; pull / push = first-time copy / recovery overwrite */
+  direction: 'both' | 'push' | 'pull';
   startedAt: string;
   finishedAt: string;
   error?: string;
-  /** The cloud was changed online (or never synced); a forced sync would overwrite it. */
-  conflict?: boolean;
+  /** The sync stopped to protect data (e.g. it would delete many rows). */
+  safety?: boolean;
   forced?: boolean;
-  tables?: Record<string, { written: number; deleted: number }>;
-  files?: { uploaded?: number; deleted?: number; downloaded?: number; missingOnDisk?: string[] };
+  trigger?: 'manual' | 'auto';
+  tables?: Record<
+    string,
+    {
+      toCloud?: number;
+      toLaptop?: number;
+      deletedCloud?: number;
+      deletedLaptop?: number;
+      written?: number;
+      deleted?: number;
+    }
+  >;
+  /** Records changed in both places since the last sync, and which version was kept. */
+  conflicts?: Array<{ table: string; key: string; kept: 'laptop' | 'cloud'; reason: string }>;
+  skipped?: number;
+  files?: { uploaded?: number; downloaded?: number; missingOnDisk?: string[] };
 };
 
 export type CloudSyncStatus =
@@ -403,10 +416,19 @@ export type CloudSyncStatus =
       running: boolean;
       operation: string | null;
       progress: string;
-      lastPushAt: string | null;
-      lastPullAt: string | null;
+      lastSyncAt: string | null;
       lastResult: CloudSyncResult | null;
       pending: { neverSynced?: boolean; changedTables?: string[]; error?: string } | null;
+      auto: {
+        enabled: boolean;
+        minutes: number;
+        lastCheckAt: string | null;
+        /** up-to-date | offline | unstable | synced | blocked | failed | busy | needs-setup */
+        outcome: string | null;
+        message: string | null;
+        /** A sync stopped to protect data: automatic sync waits for the doctor to decide. */
+        blocked: string | null;
+      };
     };
 
 export type BackupInfo = {

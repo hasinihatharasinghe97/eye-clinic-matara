@@ -4,7 +4,7 @@
 **Database:** Oracle MySQL HeatWave Always Free (~50 GiB) via Network Load Balancer  
 **Files:** stored in MySQL (`STORE_FILES_IN_DB=1`)
 
-Checklist: [DEPLOY-CHECKLIST.md](DEPLOY-CHECKLIST.md)
+Offline clinic laptop that syncs with this database: [OFFLINE-LAPTOP.md](OFFLINE-LAPTOP.md)
 
 ---
 
@@ -71,17 +71,15 @@ Cold start after idle: ~30–60s. Open `/api/health` — `ok: true` means MySQL 
 
 ---
 
-## 4. Import clinic PC data
+## 4. Load existing data (new database only)
+
+Restore a Backup ZIP into an **empty** database. Point `MYSQL_*` at HeatWave (via NLB) in `.env`
+or as environment variables, then:
 
 ```powershell
 cd D:\eye-clinic
-npm run export:snapshot
-
-# Point MYSQL_* at HeatWave (via NLB) — use .env or env vars:
 $env:MYSQL_SSL="1"
 $env:STORE_FILES_IN_DB="1"
-npm run import:heatwave
-# or:
 node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
 ```
 

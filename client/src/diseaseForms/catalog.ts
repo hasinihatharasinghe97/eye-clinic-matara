@@ -30,9 +30,6 @@ export function getAllDiseaseForms(): DiseaseFormDef[] {
   return [...BUILTIN_DISEASE_FORMS, ...customFormsCache];
 }
 
-/** @deprecated Prefer getAllDiseaseForms() or useDiseaseForms() for live custom forms. */
-export const DISEASE_FORMS = BUILTIN_DISEASE_FORMS;
-
 export function getDiseaseForm(id: string): DiseaseFormDef | undefined {
   return getAllDiseaseForms().find((f) => f.id === id);
 }
