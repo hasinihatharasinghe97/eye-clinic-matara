@@ -156,7 +156,7 @@ function addVisit(pdf: PdfBuilder, v: Visit, index: number) {
       },
     ]);
     for (const row of section.rows) {
-      // Empty fields stay blank: "-" already means blind (vision) or negative (glare/halo).
+      // Empty fields stay blank: "-" already means blind (vision) or negative (glare/halo/Amsler).
       body.push([row.label, row.get(v)]);
     }
   }

@@ -104,6 +104,8 @@ export type VisionData = {
   contrast?: { rEye?: string; lEye?: string };
   /** Glare test per eye: "+" (positive) or "-" (negative) */
   glare?: { rEye?: string; lEye?: string };
+  /** Amsler grid per eye: "+" (positive) or "-" (negative) */
+  amsler?: { rEye?: string; lEye?: string };
   /** Halo test per eye: "+" (positive) or "-" (negative) */
   halo?: { rEye?: string; lEye?: string };
 };

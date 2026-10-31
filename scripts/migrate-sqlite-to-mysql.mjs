@@ -9,7 +9,7 @@
  * HeatWave example (PowerShell):
  *   $env:MYSQL_HOST="<NLB public IP>"
  *   $env:MYSQL_PORT="3306"
- *   $env:MYSQL_USER="clinicadmin"
+ *   $env:MYSQL_USER="YOUR_HEATWAVE_USER_NAME"
  *   $env:MYSQL_PASSWORD="..."
  *   $env:MYSQL_DATABASE="eye_clinic"
  *   $env:MYSQL_SSL="1"

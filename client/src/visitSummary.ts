@@ -190,6 +190,13 @@ export const VISIT_SECTIONS: VisitSection[] = [
     ],
   },
   {
+    title: 'Amsler grid',
+    rows: [
+      { label: 'Amsler grid - R-Eye', get: (v) => plusMinusLabel(v.vision?.amsler?.rEye) },
+      { label: 'Amsler grid - L-Eye', get: (v) => plusMinusLabel(v.vision?.amsler?.lEye) },
+    ],
+  },
+  {
     title: 'Inspection',
     rows: (
       [

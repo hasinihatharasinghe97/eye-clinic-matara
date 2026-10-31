@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client-mock",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "C:/Users/HASINI~1/AppData/Local/Temp/claude/D--eye-clinic/7e611bc7-ceb1-4d67-b49c-2f4202308263/scratchpad/vite.mock.config.mjs"],
+      "port": 5180,
+      "autoPort": false
+    }
+  ]
+}

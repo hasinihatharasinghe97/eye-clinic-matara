@@ -134,7 +134,14 @@ const blank = (): FormState => ({
   ocOther: '',
   familyHistory: '',
   examExternal: {},
-  vision: withVisionDefaults({ distance: {}, near: {}, contrast: {}, glare: {}, halo: {} }),
+  vision: withVisionDefaults({
+    distance: {},
+    near: {},
+    contrast: {},
+    glare: {},
+    halo: {},
+    amsler: {},
+  }),
   inspection: {},
   slitLamp: {},
   cataract: {},
@@ -199,6 +206,7 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
           near: v.vision?.near || {},
           contrast: v.vision?.contrast || {},
           glare: v.vision?.glare || {},
+          amsler: v.vision?.amsler || {},
           halo: v.vision?.halo || {},
         }),
         inspection: v.inspection || {},
@@ -447,6 +455,34 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
                 vision: {
                   ...f.vision,
                   [test]: { ...f.vision[test], [eye]: v },
+                },
+              }))
+            }
+          />
+        ))}
+      </div>
+
+      <h3 className="section-title">Amsler grid</h3>
+      <div className="grid-2">
+        {(
+          [
+            ['rEye', 'Amsler grid - R-Eye'],
+            ['lEye', 'Amsler grid - L-Eye'],
+          ] as const
+        ).map(([eye, label]) => (
+          <SelectField
+            key={`amsler-${eye}`}
+            label={label}
+            value={form.vision.amsler?.[eye] || ''}
+            options={PLUS_MINUS_OPTIONS}
+            emptyLabel="Not tested"
+            optionLabel={plusMinusLabel}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                vision: {
+                  ...f.vision,
+                  amsler: { ...f.vision.amsler, [eye]: v },
                 },
               }))
             }
