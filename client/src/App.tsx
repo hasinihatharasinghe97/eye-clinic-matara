@@ -252,23 +252,6 @@ function Dashboard() {
   const [visitedToday, setVisitedToday] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
-  const [recent, setRecent] = useState<
-    Array<{
-      assessment_id: string;
-      assessment_date: string;
-      form_type: string;
-      eye: string | null;
-      patient_id: string;
-      patient_name: string;
-      opd_ad_no: string | null;
-    }>
-  >([]);
-  const [recentTotal, setRecentTotal] = useState(0);
-  const [recentPage, setRecentPage] = useState(1);
-  const [recentPageSize, setRecentPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(
-    PAGE_SIZE_OPTIONS[0]
-  );
-  const [recentLoading, setRecentLoading] = useState(true);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -304,31 +287,6 @@ function Dashboard() {
       clearTimeout(t);
     };
   }, [q, today, page, pageSize, toast]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRecentLoading(true);
-    api
-      .recentAssessments(recentPage, recentPageSize)
-      .then((list) => {
-        if (cancelled) return;
-        if (list.total > 0 && list.assessments.length === 0 && recentPage > 1) {
-          setRecentPage(1);
-          return;
-        }
-        setRecent(list.assessments);
-        setRecentTotal(list.total);
-      })
-      .catch((err) => {
-        if (!cancelled) toast.error(err instanceof Error ? err.message : 'Failed to load recent assessments');
-      })
-      .finally(() => {
-        if (!cancelled) setRecentLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [recentPage, recentPageSize, toast]);
 
   async function toggleVisited(patientId: string, visited: boolean) {
     setTogglingId(patientId);
@@ -581,85 +539,6 @@ function Dashboard() {
         )}
       </div>
 
-      <div className="card">
-        <h3>Recent assessments</h3>
-        {recentLoading ? (
-          <LoadingBlock label="Loading recent assessments…" />
-        ) : recent.length === 0 ? (
-          <EmptyState
-            title="No assessments recorded yet"
-            hint="Open a patient and add a New assessment."
-          />
-        ) : (
-          <>
-          <div className="table-wrap desktop-only">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Patient</th>
-                  <th>OPD</th>
-                  <th>Form</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((a) => (
-                  <tr
-                    key={a.assessment_id}
-                    className="clickable-row"
-                    onClick={() => navigate(`/patients/${a.patient_id}/diseases`)}
-                  >
-                    <td>{a.assessment_date}</td>
-                    <td>
-                      <a
-                        href={`#/patients/${a.patient_id}/diseases`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          navigate(`/patients/${a.patient_id}/diseases`);
-                        }}
-                      >
-                        {a.patient_name}
-                      </a>
-                    </td>
-                    <td>{a.opd_ad_no || '—'}</td>
-                    <td>{diseaseFormTitle(a.form_type)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <ul className="mobile-list mobile-only">
-            {recent.map((a) => (
-              <li key={a.assessment_id}>
-                <button
-                  type="button"
-                  className="mobile-list-item"
-                  onClick={() => navigate(`/patients/${a.patient_id}/diseases`)}
-                >
-                  <span className="mobile-list-title">{a.patient_name}</span>
-                  <span className="mobile-list-meta">
-                    {a.assessment_date} · OPD {a.opd_ad_no || '—'}
-                  </span>
-                  <span className="mobile-list-meta">{diseaseFormTitle(a.form_type)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <Pagination
-            total={recentTotal}
-            page={recentPage}
-            pageSize={recentPageSize}
-            disabled={recentLoading}
-            onPageChange={setRecentPage}
-            onPageSizeChange={(n) => {
-              setRecentPageSize(n as (typeof PAGE_SIZE_OPTIONS)[number]);
-              setRecentPage(1);
-            }}
-          />
-          </>
-        )}
-      </div>
     </>
   );
 }
