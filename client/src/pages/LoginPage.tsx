@@ -57,13 +57,7 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (user: AppUser) => void 
           autoComplete="current-password"
           required
         />
-        <Button
-          type="submit"
-          block
-          busy={busy}
-          busyLabel="Signing in…"
-          style={{ marginTop: '0.85rem' }}
-        >
+        <Button type="submit" block busy={busy} busyLabel="Signing in…">
           Sign in
         </Button>
       </form>

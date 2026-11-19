@@ -92,7 +92,7 @@ export function ChangePasswordForm({
         autoComplete="new-password"
         required
       />
-      <Button type="submit" busy={busy} busyLabel="Saving…" style={{ marginTop: '0.5rem' }}>
+      <Button type="submit" busy={busy} busyLabel="Saving…">
         {submitLabel}
       </Button>
     </form>
