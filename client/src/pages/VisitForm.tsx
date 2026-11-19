@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clearLeaveGuard, useLeaveGuard } from '@/hooks/useLeaveGuard';
 import {
   api,
   localClinicDate,
@@ -9,11 +10,13 @@ import {
   type Visit,
   type VisionData,
   type VisualFieldData,
-} from '../api';
-import { emptyVisualField, VisualFieldMarker } from '../components/VisualFieldMarker';
-import { useToast } from '../components/Toast';
-import { DateInput } from '../components/DateInput';
-import { plusMinusLabel } from '../visitSummary';
+} from '@/lib/api';
+import { emptyVisualField, VisualFieldMarker } from '@/components/VisualFieldMarker';
+import { useToast } from '@/components/Toast';
+import { DateInput } from '@/components/DateInput';
+import { plusMinusLabel } from '@/lib/visitSummary';
+import { errorMessage } from '@/lib/errors';
+import { Button } from '@/components/ui';
 
 type Props = {
   patientId: string;
@@ -190,38 +193,41 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
   const toast = useToast();
   const [form, setForm] = useState<FormState>(blank);
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  useLeaveGuard(dirty);
 
   useEffect(() => {
     if (!visitId) return;
-    api.getVisit(patientId, visitId).then((v: Visit) => {
-      setForm({
-        visitDate: v.visitDate,
-        coComplaints: v.coComplaints || '',
-        ocOther: v.ocOther || '',
-        familyHistory: v.familyHistory || '',
-        examExternal: v.examExternal || {},
-        vision: withVisionDefaults({
-          ...v.vision,
-          distance: v.vision?.distance || {},
-          near: v.vision?.near || {},
-          contrast: v.vision?.contrast || {},
-          glare: v.vision?.glare || {},
-          amsler: v.vision?.amsler || {},
-          halo: v.vision?.halo || {},
-        }),
-        inspection: v.inspection || {},
-        slitLamp: v.slitLamp || {},
-        cataract: v.cataract || {},
-        ixHistory: v.ixHistory || '',
-        diagnosis: v.diagnosis || '',
-        iop: parseIop(v.iop),
-        colorVision: parseColorVision(v.colorVision),
-        visualField: parseVisualField(v.visualField),
-        notes: v.notes || '',
-      });
-    }).catch((err) =>
-      toast.error(err instanceof Error ? err.message : 'Failed to load visit')
-    );
+    api
+      .getVisit(patientId, visitId)
+      .then((v: Visit) => {
+        setForm({
+          visitDate: v.visitDate,
+          coComplaints: v.coComplaints || '',
+          ocOther: v.ocOther || '',
+          familyHistory: v.familyHistory || '',
+          examExternal: v.examExternal || {},
+          vision: withVisionDefaults({
+            ...v.vision,
+            distance: v.vision?.distance || {},
+            near: v.vision?.near || {},
+            contrast: v.vision?.contrast || {},
+            glare: v.vision?.glare || {},
+            amsler: v.vision?.amsler || {},
+            halo: v.vision?.halo || {},
+          }),
+          inspection: v.inspection || {},
+          slitLamp: v.slitLamp || {},
+          cataract: v.cataract || {},
+          ixHistory: v.ixHistory || '',
+          diagnosis: v.diagnosis || '',
+          iop: parseIop(v.iop),
+          colorVision: parseColorVision(v.colorVision),
+          visualField: parseVisualField(v.visualField),
+          notes: v.notes || '',
+        });
+      })
+      .catch((err) => toast.error(errorMessage(err, 'Failed to load visit')));
   }, [patientId, visitId, toast]);
 
   async function submit(e: React.FormEvent) {
@@ -236,16 +242,25 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
       };
       if (visitId) await api.updateVisit(patientId, visitId, payload);
       else await api.createVisit(patientId, payload);
+      clearLeaveGuard();
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed');
+      toast.error(errorMessage(err, 'Save failed'));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <form className="card" onSubmit={submit}>
+    <form
+      className="card"
+      onSubmit={submit}
+      onChange={() => setDirty(true)}
+      onClick={(e) => {
+        // Picture-style inputs (visual field, grids) change data on click, not on change.
+        if ((e.target as Element).closest('svg, [data-marks-dirty]')) setDirty(true);
+      }}
+    >
       <h2>{visitId ? 'Edit visit' : 'New eye screening visit'}</h2>
       {patientName && (
         <p className="muted" style={{ marginTop: '-0.35rem' }}>
@@ -608,7 +623,9 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
           <input
             type="checkbox"
             checked={Boolean(form.cataract.psc)}
-            onChange={(e) => setForm((f) => ({ ...f, cataract: { ...f.cataract, psc: e.target.checked } }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, cataract: { ...f.cataract, psc: e.target.checked } }))
+            }
           />
           PSC
         </label>
@@ -616,7 +633,9 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
           <input
             type="checkbox"
             checked={Boolean(form.cataract.psx)}
-            onChange={(e) => setForm((f) => ({ ...f, cataract: { ...f.cataract, psx: e.target.checked } }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, cataract: { ...f.cataract, psx: e.target.checked } }))
+            }
           />
           PSX
         </label>
@@ -651,21 +670,27 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
           <label>K1</label>
           <input
             value={form.cataract.k1 || ''}
-            onChange={(e) => setForm((f) => ({ ...f, cataract: { ...f.cataract, k1: e.target.value } }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, cataract: { ...f.cataract, k1: e.target.value } }))
+            }
           />
         </div>
         <div className="field">
           <label>K2</label>
           <input
             value={form.cataract.k2 || ''}
-            onChange={(e) => setForm((f) => ({ ...f, cataract: { ...f.cataract, k2: e.target.value } }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, cataract: { ...f.cataract, k2: e.target.value } }))
+            }
           />
         </div>
         <div className="field">
           <label>Cyl</label>
           <input
             value={form.cataract.cyl || ''}
-            onChange={(e) => setForm((f) => ({ ...f, cataract: { ...f.cataract, cyl: e.target.value } }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, cataract: { ...f.cataract, cyl: e.target.value } }))
+            }
           />
         </div>
         <div className="field">
@@ -700,21 +725,27 @@ export function VisitForm({ patientId, visitId, patientName, onDone, onCancel }:
       <div className="grid-2" style={{ marginTop: '0.75rem' }}>
         <div className="field wide">
           <label>Ix / Investigations</label>
-          <textarea value={form.ixHistory} onChange={(e) => setForm((f) => ({ ...f, ixHistory: e.target.value }))} />
+          <textarea
+            value={form.ixHistory}
+            onChange={(e) => setForm((f) => ({ ...f, ixHistory: e.target.value }))}
+          />
         </div>
         <div className="field wide">
           <label>Additional notes</label>
-          <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+          <textarea
+            value={form.notes}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          />
         </div>
       </div>
 
       <div className="form-actions">
-        <button className="btn" type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? 'Saving...' : 'Save visit'}
-        </button>
-        <button className="btn secondary" type="button" onClick={onCancel}>
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           {'\u2190'} Back without saving
-        </button>
+        </Button>
       </div>
     </form>
   );

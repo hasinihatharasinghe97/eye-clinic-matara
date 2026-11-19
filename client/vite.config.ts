@@ -1,8 +1,14 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+/// <reference types="vitest/config" />
+import { fileURLToPath, URL } from 'node:url';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    // import { api } from '@/lib/api' instead of long ../../ paths
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   build: {
     // Wider than Vite's default (~2023 browsers) so older clinic PCs, iPads and
     // phones still run the app: Chrome/Edge 88+, Firefox 78+, Safari 14+.
@@ -15,4 +21,11 @@ export default defineConfig({
       '/uploads': 'http://localhost:3001',
     },
   },
-})
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    css: false,
+    restoreMocks: true,
+  },
+});

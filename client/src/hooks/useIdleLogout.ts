@@ -28,7 +28,7 @@ function writeLastActivity(t: number) {
   try {
     localStorage.setItem(ACTIVITY_KEY, String(t));
   } catch {
-    /* private mode etc. — this tab still tracks activity in memory */
+    /* private mode etc. - this tab still tracks activity in memory */
   }
 }
 

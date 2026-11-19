@@ -14,10 +14,12 @@ import {
 } from '../backup.js';
 import {
   clearFailedAttempts,
+  clearSessionCookie,
   issueToken,
   recordFailedAttempt,
   requireAdmin,
   safeEqual,
+  setSessionCookie,
   tooManyAttempts,
 } from '../auth.js';
 import {
@@ -106,10 +108,18 @@ router.post('/login', async (req, res) => {
   await recordLogin(user.id);
   console.log(`[auth] ${user.username} signed in from ${req.ip}`);
   const { token, expiresAt } = await issueToken(user);
-  res.json({ ok: true, token, expiresAt, user: publicUser(user) });
+  // The token goes only into the HttpOnly cookie, never into the response body.
+  setSessionCookie(req, res, token, expiresAt);
+  res.json({ ok: true, expiresAt, user: publicUser(user) });
 });
 
-/** Only reachable with a valid token (requireAuth); the client calls it on startup. */
+/** Signs this browser out by deleting its session cookie. */
+router.post('/logout', (req, res) => {
+  clearSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+/** Only reachable when signed in (requireAuth); the client calls it on startup. */
 router.get('/session', (req, res) => {
   res.json({ ok: true, user: req.user });
 });

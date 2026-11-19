@@ -49,13 +49,7 @@ const DEFAULT_DURATION: Record<ToastKind, number> = {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-function ToastCard({
-  item,
-  onClose,
-}: {
-  item: ToastItem;
-  onClose: (id: number) => void;
-}) {
+function ToastCard({ item, onClose }: { item: ToastItem; onClose: (id: number) => void }) {
   useEffect(() => {
     if (item.durationMs <= 0) return;
     const t = window.setTimeout(() => onClose(item.id), item.durationMs);

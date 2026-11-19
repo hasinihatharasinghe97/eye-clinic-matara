@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Visit } from '../api';
-import { fetchAllVisits, VISIT_SECTIONS } from '../visitSummary';
-import { EmptyState, LoadingBlock } from './PageNav';
+import type { Visit } from '@/lib/api';
+import { fetchAllVisits, VISIT_SECTIONS } from '@/lib/visitSummary';
+import { EmptyState, LoadingBlock } from '@/components/ui';
+import { errorMessage } from '@/lib/errors';
 
 type Props = {
   patientId: string;
@@ -31,7 +32,7 @@ export function VisitTimeline({ patientId, onEditVisit }: Props) {
         if (!cancelled) setVisits(all);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load visits');
+        if (!cancelled) setError(errorMessage(err, 'Could not load visits'));
       });
     return () => {
       cancelled = true;
@@ -82,9 +83,9 @@ export function VisitTimeline({ patientId, onEditVisit }: Props) {
           </select>
         </label>
         <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>
-          All {rows.length} screening form{rows.length === 1 ? '' : 's'}, oldest at the top,
-          newest at the bottom. <span className="visit-history-changed-key">Highlighted</span> =
-          changed since the visit above.
+          All {rows.length} screening form{rows.length === 1 ? '' : 's'}, oldest at the top, newest
+          at the bottom. <span className="visit-history-changed-key">Highlighted</span> = changed
+          since the visit above.
         </p>
       </div>
       <div ref={scrollRef} className="visit-history visit-timeline">
@@ -128,7 +129,7 @@ export function VisitTimeline({ patientId, onEditVisit }: Props) {
                   const changed = r > 0 && value !== values[r - 1][c];
                   return (
                     <td key={c} className={changed ? 'changed' : undefined}>
-                      {value || <span className="muted">—</span>}
+                      {value || <span className="muted">-</span>}
                     </td>
                   );
                 })}

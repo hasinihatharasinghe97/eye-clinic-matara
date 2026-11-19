@@ -1,4 +1,4 @@
-/** Allowed page sizes for list endpoints — keep in sync with client PAGE_SIZE_OPTIONS. */
+/** Allowed page sizes for list endpoints - keep in sync with client PAGE_SIZE_OPTIONS. */
 export const PAGE_SIZES = [10, 25, 50, 100];
 
 const PAGE_SIZE_SET = new Set(PAGE_SIZES);

@@ -89,6 +89,13 @@ npm run dev
 
 ## Security
 
+- **Sessions:** signing in sets an `ec_session` cookie that is HttpOnly (page scripts
+  cannot read it), SameSite=Strict, and Secure on HTTPS. It carries a signed, per-user token
+  (12 hours). It is never put in localStorage or in URLs; images and downloads use the cookie.
+  Every API except sign-in, sign-out, health and the backup cron requires it.
+- **Cross-site requests:** every change (POST/PUT/PATCH/DELETE) must also carry the header
+  `X-Requested-With: eye-clinic`, which other websites cannot send. Scripts and tools
+  calling the API must add it too (they can authenticate with `Authorization: Bearer`).
 - **Login protection:** after 5 wrong passwords a device is locked out for 1 minute,
   doubling each time (up to 1 hour). Failed logins are written to the server log.
 - **Uploads:** only real JPEG, PNG, WebP, GIF and PDF files are accepted (checked by

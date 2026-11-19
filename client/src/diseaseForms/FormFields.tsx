@@ -8,7 +8,8 @@ import {
   toDateTimeLocalValue,
   toDateValue,
 } from './helpers';
-import { DateInput, DateTimeLocalInput } from '../components/DateInput';
+import { DateInput, DateTimeLocalInput } from '@/components/DateInput';
+import { Button } from '@/components/ui';
 
 type Props = {
   fields: FormField[];
@@ -68,7 +69,8 @@ function examplePlaceholder(label: string, kind: 'text' | 'number' | 'textarea')
     return 'e.g. 0';
   }
   if (kind === 'textarea') return 'e.g. Additional notes…';
-  if (l.includes('bcva') || l.includes('ucva') || l === 'va' || l.includes('vision')) return 'e.g. 6/18';
+  if (l.includes('bcva') || l.includes('ucva') || l === 'va' || l.includes('vision'))
+    return 'e.g. 6/18';
   if (l.includes('phone')) return 'e.g. 0771234567';
   if (l.includes('name')) return 'e.g. Kamala Silva';
   return `e.g. ${label}`;
@@ -139,7 +141,9 @@ export function FormFields({ fields, data, onChange }: Props) {
               <input
                 type="number"
                 inputMode="decimal"
-                value={data[field.key] == null || data[field.key] === '' ? '' : String(data[field.key])}
+                value={
+                  data[field.key] == null || data[field.key] === '' ? '' : String(data[field.key])
+                }
                 placeholder={field.placeholder || examplePlaceholder(field.label, 'number')}
                 step={field.step ?? 'any'}
                 min={field.min}
@@ -170,7 +174,7 @@ export function FormFields({ fields, data, onChange }: Props) {
                 value={String(data[field.key] ?? '')}
                 onChange={(e) => setKey(field.key, e.target.value)}
               >
-                {field.allowEmpty !== false && <option value="">—</option>}
+                {field.allowEmpty !== false && <option value="">-</option>}
                 {field.options.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -294,7 +298,7 @@ export function FormFields({ fields, data, onChange }: Props) {
                                     {...common}
                                     type={htmlInputType(kind)}
                                     inputMode={kind === 'number' ? 'decimal' : undefined}
-                                    step={kind === 'number' ? col.step ?? 'any' : undefined}
+                                    step={kind === 'number' ? (col.step ?? 'any') : undefined}
                                     min={kind === 'number' ? col.min : undefined}
                                     max={kind === 'number' ? col.max : undefined}
                                     placeholder={
@@ -311,9 +315,8 @@ export function FormFields({ fields, data, onChange }: Props) {
                             );
                           })}
                           <td>
-                            <button
-                              type="button"
-                              className="btn danger"
+                            <Button
+                              variant="danger"
                               onClick={() =>
                                 setKey(
                                   field.key,
@@ -322,7 +325,7 @@ export function FormFields({ fields, data, onChange }: Props) {
                               }
                             >
                               Remove
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       ))
@@ -330,9 +333,8 @@ export function FormFields({ fields, data, onChange }: Props) {
                   </tbody>
                 </table>
               </div>
-              <button
-                type="button"
-                className="btn secondary"
+              <Button
+                variant="secondary"
                 style={{ marginTop: '0.5rem' }}
                 onClick={() => {
                   const blank: Record<string, string> = {};
@@ -346,7 +348,7 @@ export function FormFields({ fields, data, onChange }: Props) {
                 }}
               >
                 Add follow-up row
-              </button>
+              </Button>
             </div>
           );
         }

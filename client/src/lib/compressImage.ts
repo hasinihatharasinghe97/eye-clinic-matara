@@ -1,4 +1,4 @@
-/** Max longest edge (px) for clinic report photos — readable on phone, much smaller upload. */
+/** Max longest edge (px) for clinic report photos - readable on phone, much smaller upload. */
 const MAX_EDGE = 1600;
 /** JPEG quality 0–1 */
 const JPEG_QUALITY = 0.72;

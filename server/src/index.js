@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { db, UPLOADS_DIR, getSettings, IS_CLOUD, readUploadFile } from './db.js';
 import { startDailyBackupScheduler } from './backup.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, requireSameSiteRequest } from './auth.js';
 import { ensureUsers } from './users.js';
 import usersRouter from './routes/users.js';
 import { startAutoCloudSync } from './cloudSync.js';
@@ -87,6 +87,8 @@ app.use(['/api', '/uploads'], (_req, res, next) => {
   next();
 });
 
+// Block cross-site requests before checking the login cookie.
+app.use(requireSameSiteRequest);
 app.use(requireAuth);
 
 /** Only these file types are ever served from /uploads, each with a fixed Content-Type. */

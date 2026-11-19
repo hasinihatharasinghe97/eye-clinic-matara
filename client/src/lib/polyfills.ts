@@ -28,7 +28,7 @@ if (typeof globalThis.structuredClone !== 'function') {
   Object.defineProperty(globalThis, 'structuredClone', {
     configurable: true,
     writable: true,
-    value: <T,>(value: T): T => {
+    value: <T>(value: T): T => {
       if (value instanceof Error) {
         const copy = new (value.constructor as ErrorConstructor)(value.message);
         copy.name = value.name;

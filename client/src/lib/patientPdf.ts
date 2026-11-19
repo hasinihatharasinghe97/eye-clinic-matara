@@ -3,7 +3,6 @@ import autoTable, { type RowInput } from 'jspdf-autotable';
 import {
   api,
   localClinicDate,
-  withAuth,
   type Attachment,
   type ChartPoint,
   type DiseaseAssessment,
@@ -12,15 +11,14 @@ import {
   type ProgressLog,
   type Visit,
 } from './api';
-import { DISTANCE_SCALE, NEAR_SCALE, visionLabel, type VisionScale } from './charts/visionScale';
-import { diseaseFormTitle, getDiseaseForm } from './diseaseForms/catalog';
 import {
-  fetchAll,
-  fetchAllVisits,
-  formatValue,
-  hasValue,
-  VISIT_SECTIONS,
-} from './visitSummary';
+  DISTANCE_SCALE,
+  NEAR_SCALE,
+  visionLabel,
+  type VisionScale,
+} from '@/components/charts/visionScale';
+import { diseaseFormTitle, getDiseaseForm } from '@/diseaseForms/catalog';
+import { fetchAll, fetchAllVisits, formatValue, hasValue, VISIT_SECTIONS } from './visitSummary';
 
 const HEAD_COLOR: [number, number, number] = [15, 76, 92];
 const MARGIN = 14;
@@ -29,7 +27,7 @@ const MARGIN = 14;
 function pdfText(value: unknown): string {
   if (value == null) return '';
   return String(value)
-    .replace(/[–—−]/g, '-')
+    .replace(/[–-−]/g, '-')
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/…/g, '...')
@@ -113,9 +111,7 @@ class PdfBuilder {
 
   /** Two-column label/value table; rows with empty values are skipped. */
   details(rows: Array<[string, unknown]>, title?: string) {
-    const body = rows
-      .filter(([, v]) => hasValue(v))
-      .map(([k, v]) => [k, formatValue(v)]);
+    const body = rows.filter(([, v]) => hasValue(v)).map(([k, v]) => [k, formatValue(v)]);
     if (body.length === 0) return;
     if (title) this.heading(title, 10);
     this.table(null, body, {
@@ -224,7 +220,7 @@ function addAssessment(pdf: PdfBuilder, a: DiseaseAssessment) {
 
 async function loadImage(url: string): Promise<{ data: string; w: number; h: number } | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { credentials: 'same-origin' });
     if (!res.ok) return null;
     const blob = await res.blob();
     const bitmap = await createImageBitmap(blob);
@@ -307,7 +303,9 @@ function drawChart(doc: jsPDF, chart: PdfChart, x: number, y: number, w: number,
       : bottom - ((v - lo) / (hi - lo)) * (bottom - top);
   const px = (date: string) => {
     const i = dates.indexOf(date);
-    return dates.length === 1 ? (left + right) / 2 : left + (i / (dates.length - 1)) * (right - left);
+    return dates.length === 1
+      ? (left + right) / 2
+      : left + (i / (dates.length - 1)) * (right - left);
   };
 
   doc.setFontSize(scale ? 5.5 : 6);
@@ -363,9 +361,8 @@ function buildCharts(data: PatientCharts): PdfChart[] {
   const one = (key: string, name: string): PdfSeries[] => [
     { name, color: RIGHT_COLOR, points: s(key) },
   ];
-  const pressure = s('iopRight').length || s('iopLeft').length
-    ? rl('iopRight', 'iopLeft')
-    : one('iop', 'IOP');
+  const pressure =
+    s('iopRight').length || s('iopLeft').length ? rl('iopRight', 'iopLeft') : one('iop', 'IOP');
   const charts: PdfChart[] = [
     {
       title: 'Vision improvement',
@@ -451,8 +448,10 @@ export async function downloadPatientProfilePdf(patient: Patient) {
     api.getPatientCharts(id),
   ]);
 
-  const byDate = <T,>(key: (x: T) => string) => (a: T, b: T) =>
-    key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
+  const byDate =
+    <T>(key: (x: T) => string) =>
+    (a: T, b: T) =>
+      key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
   assessments.sort(byDate((a) => a.assessmentDate));
   progress.sort(byDate((l) => l.logDate));
   attendance.sort(byDate((d) => d.date));
@@ -485,7 +484,8 @@ export async function downloadPatientProfilePdf(patient: Patient) {
   ]);
 
   pdf.heading(`Clinic attendance (${attendance.length})`);
-  if (attendance.length) pdf.details([['Dates attended', attendance.map((d) => d.date).join(', ')]]);
+  if (attendance.length)
+    pdf.details([['Dates attended', attendance.map((d) => d.date).join(', ')]]);
   else pdf.note('No attendance recorded.');
 
   addCharts(pdf, charts);
@@ -518,8 +518,8 @@ export async function downloadPatientProfilePdf(patient: Patient) {
   for (const file of attachments) {
     const label = `${file.originalName} - ${String(file.createdAt || '').slice(0, 10)}`;
     const isImage = (file.mimeType || '').startsWith('image/');
-    // Uploads need the login token, sent as ?access_token= like the Images tab does.
-    const img = isImage ? await loadImage(withAuth(file.url)) : null;
+    // The session cookie is sent with the image request automatically.
+    const img = isImage ? await loadImage(file.url) : null;
     if (!img) {
       pdf.note(label);
       continue;
@@ -538,7 +538,11 @@ export async function downloadPatientProfilePdf(patient: Patient) {
 
   // File is named by patient name + OPD number (e.g. "Kamala Silva - OPD-1024.pdf").
   const fileName = [patient.name, patient.opdAdNo]
-    .map((part) => String(part || '').trim().replace(/[\\/:*?"<>|]+/g, '_'))
+    .map((part) =>
+      String(part || '')
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, '_')
+    )
     .filter(Boolean)
     .join(' - ');
   pdf.finish(`${fileName || 'patient'}.pdf`);

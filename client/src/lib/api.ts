@@ -1,43 +1,50 @@
-const TOKEN_KEY = 'eye-clinic-token';
-export const TOKEN_STORAGE_KEY = TOKEN_KEY;
+import type { FormField } from '@/diseaseForms/types';
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
+/*
+ * Authentication: the server keeps the login token in an HttpOnly cookie. This code never
+ * sees or stores it - the browser attaches it to every request (API calls, <img>, file
+ * downloads) by itself. That way an injected script can't steal the session.
+ */
 
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
-
-/** Token format from the server: `<expiresAtMs>.<nonce>.<signature>` */
-export function isLoggedIn(): boolean {
-  const expiresAt = Number(getToken()?.split('.')[0]);
-  return Number.isFinite(expiresAt) && expiresAt > Date.now();
-}
-
-/** Fired when the server rejects the stored token; App shows the login screen. */
+/** Fired when the server says the session is gone (401); App shows the login screen. */
 export const AUTH_EXPIRED_EVENT = 'eye-clinic-auth-expired';
 
-function authHeaders(headers?: HeadersInit): Headers {
-  const h = new Headers(headers);
-  const token = getToken();
-  if (token) h.set('Authorization', `Bearer ${token}`);
-  return h;
+/**
+ * localStorage key used only as a "signed out" signal between open tabs (holds a time,
+ * nothing secret). Changing it in one tab fires a `storage` event in the others.
+ */
+export const SIGNOUT_BROADCAST_KEY = 'eye-clinic-signed-out';
+
+// Remove the token older versions kept in localStorage.
+try {
+  localStorage.removeItem('eye-clinic-token');
+} catch {
+  /* storage unavailable */
 }
 
-function handleUnauthorized(res: Response) {
-  if (res.status === 401 && getToken()) {
-    setToken(null);
-    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+/** Tells other open tabs that this browser signed out. */
+export function broadcastSignOut(): void {
+  try {
+    localStorage.setItem(SIGNOUT_BROADCAST_KEY, String(Date.now()));
+  } catch {
+    /* storage unavailable: other tabs find out on their next request */
   }
 }
 
-/** For <img src>, <a href> and downloads, which can't send an Authorization header. */
-export function withAuth(url: string): string {
-  const token = getToken();
-  if (!token) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`;
+/** Header the server requires on every change, proving the request came from this app. */
+const APP_HEADER = { 'X-Requested-With': 'eye-clinic' } as const;
+
+function withAppHeaders(headers?: HeadersInit): Headers {
+  const h = new Headers(headers);
+  for (const [k, v] of Object.entries(APP_HEADER)) h.set(k, v);
+  return h;
+}
+
+function handleUnauthorized(res: Response, url: string) {
+  // A wrong password on the login screen is also a 401; that is not an expired session.
+  if (res.status === 401 && !url.endsWith('/api/system/login')) {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
 }
 
 /** Local calendar date YYYY-MM-DD in the clinic timezone (Asia/Colombo).
@@ -52,24 +59,34 @@ export function localClinicDate(d = new Date()): string {
   }).format(d);
 }
 
-async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const timeoutMs = 45_000;
+const DEFAULT_TIMEOUT_MS = 45_000;
+/** File uploads (up to 15 MB) can be slow on clinic mobile data. */
+const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
+async function request<T>(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       ...options,
-      headers: authHeaders(options.headers),
+      headers: withAppHeaders(options.headers),
+      // Send the session cookie (same site only).
+      credentials: 'same-origin',
       signal: controller.signal,
     });
-    handleUnauthorized(res);
+    handleUnauthorized(res, url);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || res.statusText || 'Request failed');
     return data as T;
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new Error(
-        'Server took too long to respond. On free Render this is often a cold start — wait ~30s and refresh. If it keeps failing, check MySQL / HeatWave connection.'
+        'Server took too long to respond. On free Render this is often a cold start - wait ~30s and refresh. If it keeps failing, check MySQL / HeatWave connection.',
+        { cause: err }
       );
     }
     throw err;
@@ -355,7 +372,7 @@ export type CustomDiseaseForm = {
   id: string;
   title: string;
   shortTitle: string;
-  fields: import('./diseaseForms/types').FormField[];
+  fields: FormField[];
   custom?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -455,7 +472,7 @@ export type BackupInfo = {
 
 export const api = {
   login: (username: string, password: string) =>
-    request<{ ok: boolean; token: string; user: AppUser }>('/api/system/login', {
+    request<{ ok: boolean; user: AppUser }>('/api/system/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -463,14 +480,16 @@ export const api = {
 
   checkSession: () => request<{ ok: boolean; user: AppUser }>('/api/system/session'),
 
-  /** Change your own password; keeps this device signed in with a fresh token. */
+  /** Deletes this browser's session cookie on the server. */
+  logout: () => request<{ ok: boolean }>('/api/system/logout', { method: 'POST' }),
+
+  /** Change your own password; the server gives this browser a fresh session cookie. */
   changeMyPassword: async (currentPassword: string, newPassword: string) => {
-    const res = await request<{ ok: boolean; token: string; user: AppUser }>('/api/users/me/password', {
+    const res = await request<{ ok: boolean; user: AppUser }>('/api/users/me/password', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword, newPassword }),
     });
-    setToken(res.token);
     return res.user;
   },
 
@@ -518,10 +537,13 @@ export const api = {
     }),
 
   backup: () =>
-    request<{ ok: boolean; zipName: string; lastBackupAt: string; size: number; downloadUrl: string }>(
-      '/api/system/backup',
-      { method: 'POST' }
-    ),
+    request<{
+      ok: boolean;
+      zipName: string;
+      lastBackupAt: string;
+      size: number;
+      downloadUrl: string;
+    }>('/api/system/backup', { method: 'POST' }),
 
   uploadBackupToDrive: () =>
     request<{
@@ -535,8 +557,8 @@ export const api = {
 
   listBackups: () => request<BackupInfo[]>('/api/system/backups'),
 
-  backupDownloadUrl: (id: string) =>
-    withAuth(`/api/system/backups/${encodeURIComponent(id)}/download`),
+  // Plain URL: the browser sends the session cookie with the download itself.
+  backupDownloadUrl: (id: string) => `/api/system/backups/${encodeURIComponent(id)}/download`,
 
   listPatients: (q = '', onDate?: string, page = 1, pageSize = 10) => {
     const params = new URLSearchParams();
@@ -570,11 +592,13 @@ export const api = {
       page: String(page),
       pageSize: String(pageSize),
     });
-    return request<{
-      onDate: string;
-      visitedToday: boolean;
-      dates: Array<{ date: string; createdAt: string; opdAdNo?: string | null }>;
-    } & PaginatedMeta>(`/api/patients/${patientId}/attendance?${params}`);
+    return request<
+      {
+        onDate: string;
+        visitedToday: boolean;
+        dates: Array<{ date: string; createdAt: string; opdAdNo?: string | null }>;
+      } & PaginatedMeta
+    >(`/api/patients/${patientId}/attendance?${params}`);
   },
 
   recentAssessments: (page = 1, pageSize = 10) => {
@@ -715,15 +739,13 @@ export const api = {
     const form = new FormData();
     form.append('file', prepared);
     if (visitId) form.append('visitId', visitId);
-    const res = await fetch(`/api/patients/${patientId}/attachments`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: form,
-    });
-    handleUnauthorized(res);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
-    return data as Attachment;
+    // Goes through request() so it gets the app header and cookie like every other call.
+    // (No Content-Type: the browser sets the multipart boundary itself.)
+    return request<Attachment>(
+      `/api/patients/${patientId}/attachments`,
+      { method: 'POST', body: form },
+      UPLOAD_TIMEOUT_MS
+    );
   },
 
   deleteAttachment: (patientId: string, attachmentId: string) =>
@@ -743,9 +765,7 @@ export const api = {
   },
 
   getDiseaseAssessment: (patientId: string, assessmentId: string) =>
-    request<DiseaseAssessment>(
-      `/api/patients/${patientId}/disease-assessments/${assessmentId}`
-    ),
+    request<DiseaseAssessment>(`/api/patients/${patientId}/disease-assessments/${assessmentId}`),
 
   createDiseaseAssessment: (
     patientId: string,
@@ -773,20 +793,16 @@ export const api = {
       notes?: string;
     }
   ) =>
-    request<DiseaseAssessment>(
-      `/api/patients/${patientId}/disease-assessments/${assessmentId}`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    ),
+    request<DiseaseAssessment>(`/api/patients/${patientId}/disease-assessments/${assessmentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 
   deleteDiseaseAssessment: (patientId: string, assessmentId: string) =>
-    request<{ ok: boolean }>(
-      `/api/patients/${patientId}/disease-assessments/${assessmentId}`,
-      { method: 'DELETE' }
-    ),
+    request<{ ok: boolean }>(`/api/patients/${patientId}/disease-assessments/${assessmentId}`, {
+      method: 'DELETE',
+    }),
 
   listCustomDiseaseForms: () => request<CustomDiseaseForm[]>('/api/disease-forms'),
 

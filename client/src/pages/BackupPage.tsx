@@ -1,14 +1,26 @@
 import { useEffect, useState } from 'react';
-import { api, type SystemSettings, type BackupInfo } from '../api';
-import { useToast } from '../components/Toast';
-import { CloudSyncCard } from '../components/CloudSyncCard';
+import { api, type SystemSettings, type BackupInfo } from '@/lib/api';
+import { useToast } from '@/components/Toast';
+import { CloudSyncCard } from '@/components/CloudSyncCard';
+import { errorMessage } from '@/lib/errors';
+import { formatDateTime, formatSize } from '@/lib/format';
+import { Button, DataTable, type Column } from '@/components/ui';
 
-function formatSize(n?: number) {
-  if (n == null) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
+const BACKUP_COLUMNS: ReadonlyArray<Column<BackupInfo>> = [
+  { key: 'name', header: 'Name', render: (b) => b.zipName },
+  { key: 'created', header: 'Created', render: (b) => formatDateTime(b.createdAt, '-') },
+  { key: 'size', header: 'Size', render: (b) => formatSize(b.size) },
+  {
+    key: 'download',
+    header: <span className="visually-hidden">Download</span>,
+    render: (b) => (
+      // A real link (not a button) so the browser downloads the file.
+      <a className="btn secondary" href={api.backupDownloadUrl(b.id)}>
+        Download
+      </a>
+    ),
+  },
+];
 
 export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
   const toast = useToast();
@@ -25,9 +37,7 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
   }
 
   useEffect(() => {
-    refresh().catch((err) =>
-      toast.error(err instanceof Error ? err.message : 'Failed to load backup settings')
-    );
+    refresh().catch((err) => toast.error(errorMessage(err, 'Failed to load backup settings')));
   }, [toast]);
 
   async function saveSettings(e: React.FormEvent) {
@@ -39,7 +49,7 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
       setBackupFolder(s.backupFolder);
       toast.success('Settings saved.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save settings');
+      toast.error(errorMessage(err, 'Could not save settings'));
     } finally {
       setBusy(false);
     }
@@ -59,7 +69,7 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
           : `Backup created: ${result.zipName} (${formatSize(result.size)}). Download it below and copy to Google Drive / USB.`
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Backup failed');
+      toast.error(errorMessage(err, 'Backup failed'));
     } finally {
       setBusy(false);
     }
@@ -74,7 +84,7 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
         `Uploaded ${result.zipName} to Google Drive only (not stored again in HeatWave). Previous daily Drive backup was removed.`
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Google Drive upload failed');
+      toast.error(errorMessage(err, 'Google Drive upload failed'));
     } finally {
       setBusy(false);
     }
@@ -92,19 +102,20 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
         {cloud ? (
           <>
             <p className="muted" style={{ marginBottom: '0.75rem' }}>
-              This clinic runs on <strong>Render</strong> (app) + <strong>Oracle HeatWave MySQL</strong>{' '}
-              (database). Live patient records and photos/PDFs live in HeatWave. The important{' '}
-              <strong>daily offsite ZIP</strong> goes to <strong>Google Drive</strong> (not kept again
-              in HeatWave). Render’s free disk is temporary and is not used for clinic data.
+              This clinic runs on <strong>Render</strong> (app) +{' '}
+              <strong>Oracle HeatWave MySQL</strong> (database). Live patient records and
+              photos/PDFs live in HeatWave. The important <strong>daily offsite ZIP</strong> goes to{' '}
+              <strong>Google Drive</strong> (not kept again in HeatWave). Render’s free disk is
+              temporary and is not used for clinic data.
             </p>
             <ul className="muted" style={{ margin: '0 0 0.75rem', paddingLeft: '1.25rem' }}>
               <li>
-                <strong>Google Drive (recommended):</strong> every night at 1:00&nbsp;am Asia/Colombo
-                uploads <code>Nethraloka-Daily-….zip</code> to Drive only, then deletes yesterday’s
-                Drive file.
+                <strong>Google Drive (recommended):</strong> every night at 1:00&nbsp;am
+                Asia/Colombo uploads <code>Nethraloka-Daily-….zip</code> to Drive only, then deletes
+                yesterday’s Drive file.
               </li>
               <li>
-                <strong>Backup now</strong> is optional — it stores a ZIP in HeatWave (
+                <strong>Backup now</strong> is optional - it stores a ZIP in HeatWave (
                 <code>backup_archives</code>) so you can download it from this page or keep a USB
                 copy. Last {keep} HeatWave ZIPs are kept.
               </li>
@@ -118,21 +129,23 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
           <p className="muted">
             Patient data is in MySQL. Uploads and ZIP backups stay on this PC (last {keep} kept).
             Back up regularly and copy ZIPs to Google Drive, OneDrive, or USB so records survive PC
-            failure. Optional: enable Google Drive auto-upload (same env vars as cloud) for a nightly
-            offsite copy.
+            failure. Optional: enable Google Drive auto-upload (same env vars as cloud) for a
+            nightly offsite copy.
           </p>
         )}
         {settings?.backupEncryption &&
           (settings.backupEncryption.enabled ? (
             <p className="muted">
               🔒 <strong>Backups are encrypted</strong> (AES-256). Files end in{' '}
-              <code>.zip.enc</code> and can only be opened with the backup password — keep a copy of
+              <code>.zip.enc</code> and can only be opened with the backup password - keep a copy of
               it somewhere safe, away from this computer. To open one:{' '}
               <code>node scripts/decrypt-backup.mjs &lt;file&gt;</code>
               {settings.backupEncryption.weak && (
                 <span className="error">
                   {' '}
-                  — the backup password is short; use at least {settings.backupEncryption.minLength}{' '}
+                  - the backup password is short; use at least {
+                    settings.backupEncryption.minLength
+                  }{' '}
                   characters.
                 </span>
               )}
@@ -146,16 +159,15 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
             </p>
           ))}
         <p className="muted">
-          Last HeatWave/local backup:{' '}
-          {settings?.lastBackupAt ? new Date(settings.lastBackupAt).toLocaleString() : 'Never'}
+          Last HeatWave/local backup: {formatDateTime(settings?.lastBackupAt)}
           {settings?.backupOverdue ? (
-            <span className="error"> — overdue: click Backup now, then Download latest</span>
+            <span className="error"> - overdue: click Backup now, then Download latest</span>
           ) : null}
         </p>
         <div className="row">
-          <button className="btn" type="button" onClick={runBackup} disabled={busy}>
+          <Button onClick={runBackup} disabled={busy}>
             {busy ? 'Working…' : 'Backup now'}
-          </button>
+          </Button>
           {backups[0] && (
             <a className="btn secondary" href={api.backupDownloadUrl(backups[0].id)}>
               Download latest
@@ -169,16 +181,16 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
         {drive?.configured ? (
           <>
             <p className="muted" style={{ marginTop: 0 }}>
-              Enabled. Every day at <strong>1:00 am Asia/Colombo</strong> the server builds a ZIP and
-              uploads <code>Nethraloka-Daily-YYYY-MM-DD.zip</code> to your Drive folder only — it is{' '}
-              <strong>not</strong> kept again inside HeatWave. When today’s upload succeeds,
+              Enabled. Every day at <strong>1:00 am Asia/Colombo</strong> the server builds a ZIP
+              and uploads <code>Nethraloka-Daily-YYYY-MM-DD.zip</code> to your Drive folder only -
+              it is <strong>not</strong> kept again inside HeatWave. When today’s upload succeeds,
               yesterday’s Drive file is deleted (only the latest daily file stays on Drive).
             </p>
             <ul className="muted" style={{ margin: '0 0 0.75rem', paddingLeft: '1.25rem' }}>
               <li>
                 Last Drive upload:{' '}
                 {drive.lastDriveBackupAt
-                  ? `${new Date(drive.lastDriveBackupAt).toLocaleString()} (${drive.lastDriveFileName || 'ZIP'})`
+                  ? `${formatDateTime(drive.lastDriveBackupAt)} (${drive.lastDriveFileName || 'ZIP'})`
                   : 'Never'}
               </li>
               {drive.lastDriveError ? (
@@ -187,15 +199,14 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
                 </li>
               ) : null}
               <li>
-                Free Render may sleep at 1:00 am — if so, the upload runs on the next wake after
+                Free Render may sleep at 1:00 am - if so, the upload runs on the next wake after
                 1:00 am, or via an external cron hitting{' '}
-                <code>POST /api/system/cron/drive-backup</code> with{' '}
-                <code>X-Cron-Secret</code>.
+                <code>POST /api/system/cron/drive-backup</code> with <code>X-Cron-Secret</code>.
               </li>
             </ul>
-            <button className="btn secondary" type="button" onClick={runDriveUpload} disabled={busy}>
+            <Button variant="secondary" onClick={runDriveUpload} disabled={busy}>
               {busy ? 'Working…' : 'Upload to Google Drive now'}
-            </button>
+            </Button>
           </>
         ) : (
           <>
@@ -205,23 +216,26 @@ export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
             </p>
             <ol className="muted" style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
               <li>
-                In Google Cloud Console create a project → enable <strong>Google Drive API</strong> →
-                create a <strong>Service account</strong> → download its JSON key.
+                In Google Cloud Console create a project → enable <strong>Google Drive API</strong>{' '}
+                → create a <strong>Service account</strong> → download its JSON key.
               </li>
               <li>
-                In Google Drive, create a folder (e.g. <code>Nethraloka-Backups</code>), share it with
-                the service account email (<code>…@….iam.gserviceaccount.com</code>) as{' '}
+                In Google Drive, create a folder (e.g. <code>Nethraloka-Backups</code>), share it
+                with the service account email (<code>…@….iam.gserviceaccount.com</code>) as{' '}
                 <strong>Editor</strong>, and copy the folder ID from the URL.
               </li>
               <li>
                 On Render (Environment), set:
-                <pre className="code-block" style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-{`GOOGLE_DRIVE_FOLDER_ID=your_folder_id
+                <pre
+                  className="code-block"
+                  style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem', marginTop: '0.5rem' }}
+                >
+                  {`GOOGLE_DRIVE_FOLDER_ID=your_folder_id
 GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 BACKUP_CRON_SECRET=long-random-secret`}
                 </pre>
-                (Or set <code>GOOGLE_SERVICE_ACCOUNT_JSON_BASE64</code> if the JSON is awkward in the
-                env UI.)
+                (Or set <code>GOOGLE_SERVICE_ACCOUNT_JSON_BASE64</code> if the JSON is awkward in
+                the env UI.)
               </li>
               <li>
                 Optional but recommended on free Render: schedule{' '}
@@ -233,7 +247,9 @@ BACKUP_CRON_SECRET=long-random-secret`}
                 header <code>X-Cron-Secret: your-secret</code> so the service wakes and uploads.
               </li>
             </ol>
-            <p className="muted">Full steps: <code>docs/HOSTING.md</code> → Google Drive backups.</p>
+            <p className="muted">
+              Full steps: <code>docs/HOSTING.md</code> → Google Drive backups.
+            </p>
           </>
         )}
       </div>
@@ -270,11 +286,12 @@ BACKUP_CRON_SECRET=long-random-secret`}
           <>
             <p className="muted">
               Each ZIP contains <code>snapshot.json</code>, <code>uploads/</code>, and{' '}
-              <code>README-RESTORE.txt</code>. To restore into a <strong>new Oracle HeatWave</strong>{' '}
-              instance (empty <code>eye_clinic</code> database recommended):
+              <code>README-RESTORE.txt</code>. To restore into a{' '}
+              <strong>new Oracle HeatWave</strong> instance (empty <code>eye_clinic</code> database
+              recommended):
             </p>
             <pre className="code-block" style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
-{`# 1) Create a new HeatWave DB + NLB (same as first deploy)
+              {`# 1) Create a new HeatWave DB + NLB (same as first deploy)
 # 2) CREATE DATABASE eye_clinic;  (via DBeaver / MySQL client)
 # 3) Point MYSQL_* at the new NLB, then:
 $env:MYSQL_HOST="new-nlb-public-ip"
@@ -299,7 +316,7 @@ node scripts/restore-from-backup.mjs .\\Nethraloka-Daily-YYYY-MM-DD.zip
               <code>README-RESTORE.txt</code>. On a PC with Node + this project:
             </p>
             <pre className="code-block" style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
-{`# Point MYSQL_* at the destination MySQL
+              {`# Point MYSQL_* at the destination MySQL
 node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
             </pre>
             <p className="muted">
@@ -314,7 +331,7 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
         <h3>{cloud ? 'Optional ZIP backups in HeatWave' : 'Saved backups'}</h3>
         {cloud && (
           <p className="muted" style={{ marginTop: 0 }}>
-            These are only from <strong>Backup now</strong> / stale auto-backup — useful for a quick
+            These are only from <strong>Backup now</strong> / stale auto-backup - useful for a quick
             download. Daily Drive uploads are <strong>not</strong> listed here (they are only on
             Google Drive).
           </p>
@@ -322,70 +339,59 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
         {backups.length === 0 ? (
           <p className="empty">
             {cloud
-              ? 'No HeatWave ZIPs yet. That is fine if Google Drive daily upload is working — or click Backup now for an optional in-app ZIP.'
+              ? 'No HeatWave ZIPs yet. That is fine if Google Drive daily upload is working - or click Backup now for an optional in-app ZIP.'
               : 'No backups yet. Click Backup now to create the first ZIP.'}
           </p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Created</th>
-                  <th>Size</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {backups.map((b) => (
-                  <tr key={b.id}>
-                    <td>{b.zipName}</td>
-                    <td>{new Date(b.createdAt).toLocaleString()}</td>
-                    <td>{formatSize(b.size)}</td>
-                    <td>
-                      <a className="btn secondary" href={api.backupDownloadUrl(b.id)}>
-                        Download
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            caption="Saved backups"
+            columns={BACKUP_COLUMNS}
+            rows={backups}
+            rowKey={(b) => b.id}
+          />
         )}
       </div>
 
       {!cloud && isAdmin && (
-      <form className="card" onSubmit={saveSettings}>
-        {(
-          <>
-            <h3>Backup destination folder</h3>
-            <p className="muted">
-              Leave the project default (<code>data/backups</code>) so it follows this folder on any
-              PC. Or set a path inside Google Drive / OneDrive on <em>this</em> computer so backups
-              sync automatically.
-            </p>
-            <div className="field">
-              <label>Full folder path on this PC</label>
-              <input value={backupFolder} onChange={(e) => setBackupFolder(e.target.value)} required />
-            </div>
-            {settings?.defaultBackupFolder && backupFolder !== settings.defaultBackupFolder && (
-              <button
-                className="btn secondary"
-                type="button"
-                style={{ marginBottom: '0.75rem' }}
-                onClick={() => setBackupFolder(settings.defaultBackupFolder || '')}
-              >
-                Use project default folder
-              </button>
-            )}
-          </>
-        )}
+        <form className="card" onSubmit={saveSettings}>
+          {
+            <>
+              <h3>Backup destination folder</h3>
+              <p className="muted">
+                Leave the project default (<code>data/backups</code>) so it follows this folder on
+                any PC. Or set a path inside Google Drive / OneDrive on <em>this</em> computer so
+                backups sync automatically.
+              </p>
+              <div className="field">
+                <label>Full folder path on this PC</label>
+                <input
+                  value={backupFolder}
+                  onChange={(e) => setBackupFolder(e.target.value)}
+                  required
+                />
+              </div>
+              {settings?.defaultBackupFolder && backupFolder !== settings.defaultBackupFolder && (
+                <Button
+                  variant="secondary"
 
-        <button className="btn secondary" type="submit" disabled={busy} style={{ marginTop: '0.75rem' }}>
-          Save settings
-        </button>
-      </form>
+                  style={{ marginBottom: '0.75rem' }}
+                  onClick={() => setBackupFolder(settings.defaultBackupFolder || '')}
+                >
+                  Use project default folder
+                </Button>
+              )}
+            </>
+          }
+
+          <Button
+            variant="secondary"
+            type="submit"
+            disabled={busy}
+            style={{ marginTop: '0.75rem' }}
+          >
+            Save settings
+          </Button>
+        </form>
       )}
     </>
   );

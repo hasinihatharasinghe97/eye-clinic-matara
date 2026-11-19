@@ -41,11 +41,7 @@ const hereditary: DiseaseFormDef = {
       'Normal',
     ]),
     section('6. Fundus findings (pattern recognition)'),
-    checks('rpFundus', 'RP', [
-      'Bone spicule pigmentation',
-      'Attenuated vessels',
-      'Waxy disc',
-    ]),
+    checks('rpFundus', 'RP', ['Bone spicule pigmentation', 'Attenuated vessels', 'Waxy disc']),
     checks('stargardtFundus', 'Stargardt / Fundus flavimaculatus', [
       'Beaten bronze macula',
       'Yellow-white flecks',
@@ -56,10 +52,7 @@ const hereditary: DiseaseFormDef = {
       'Vitelliruptive stage',
       'Atrophic scar',
     ]),
-    checks('coneRodFundus', 'Cone-rod dystrophy', [
-      'Normal fundus',
-      "Bull's-eye maculopathy",
-    ]),
+    checks('coneRodFundus', 'Cone-rod dystrophy', ['Normal fundus', "Bull's-eye maculopathy"]),
     checks('xlrsFundus', 'X-linked retinoschisis', [
       'Foveal schisis (stellate pattern)',
       'Peripheral schisis',
@@ -141,11 +134,7 @@ const macularDystrophy: DiseaseFormDef = {
       'Sporadic',
       'Unknown',
     ]),
-    checks('familyHistory', 'B. Family history', [
-      'Positive',
-      'Negative',
-      'Consanguinity present',
-    ]),
+    checks('familyHistory', 'B. Family history', ['Positive', 'Negative', 'Consanguinity present']),
     checks('ageOfOnset', 'C. Age of onset', ['Childhood', 'Adolescence', 'Early adulthood']),
     section('3–5. Symptoms & fundus'),
     checks('symptoms', 'Symptoms (C/O)', [
@@ -271,10 +260,7 @@ const retinalDegenerations: DiseaseFormDef = {
       'Immobile',
       'Absolute scotoma',
     ]),
-    checks('whiteLesions', 'White lesions', [
-      'White with pressure',
-      'White without pressure',
-    ]),
+    checks('whiteLesions', 'White lesions', ['White with pressure', 'White without pressure']),
     checks('otherPeripheral', 'Other peripheral lesions', [
       'Focal pigment clumps',
       'Peripheral chorioretinal atrophy',
@@ -466,4 +452,9 @@ const rop: DiseaseFormDef = {
   ],
 };
 
-export const FORM_PART_3: DiseaseFormDef[] = [hereditary, macularDystrophy, retinalDegenerations, rop];
+export const FORM_PART_3: DiseaseFormDef[] = [
+  hereditary,
+  macularDystrophy,
+  retinalDegenerations,
+  rop,
+];

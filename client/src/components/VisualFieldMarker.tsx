@@ -1,4 +1,5 @@
-import type { VisualFieldEye, VisualFieldData } from '../api';
+import type { VisualFieldEye, VisualFieldData } from '@/lib/api';
+import { Button } from '@/components/ui';
 
 const EMPTY_EYE: VisualFieldEye = { tl: false, tr: false, bl: false, br: false };
 
@@ -36,7 +37,12 @@ function EyeCircle({
   return (
     <div className="vf-eye">
       <div className="vf-eye-label">{label}</div>
-      <svg viewBox="0 0 140 140" className="vf-svg" role="img" aria-label={`${label} eye visual field`}>
+      <svg
+        viewBox="0 0 140 140"
+        className="vf-svg"
+        role="img"
+        aria-label={`${label} eye visual field`}
+      >
         <defs>
           <pattern
             id={`hatch-${label}`}
@@ -64,7 +70,7 @@ function EyeCircle({
               className="vf-quad"
               onClick={() => onToggle(q.key)}
             >
-              <title>{q.title} — click to toggle defect</title>
+              <title>{q.title} - click to toggle defect</title>
             </rect>
           ))}
         </g>
@@ -84,9 +90,9 @@ function EyeCircle({
           {label}
         </text>
       </svg>
-      <button type="button" className="btn secondary vf-clear" onClick={onClear}>
+      <Button variant="secondary" className="vf-clear" onClick={onClear}>
         Clear {label}
-      </button>
+      </Button>
     </div>
   );
 }

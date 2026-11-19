@@ -25,7 +25,7 @@ function isMobileBrowser() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-/** Universal link — works on phones; on desktop shows the wa.me landing page. */
+/** Universal link - works on phones; on desktop shows the wa.me landing page. */
 export function whatsAppMeUrl(phoneDigits: string, message: string): string {
   const text = String(message || '').trim();
   if (!text) return `https://wa.me/${phoneDigits}`;
@@ -50,7 +50,7 @@ export function whatsAppChatUrl(phoneDigits: string, message: string): string {
     : whatsAppWebUrl(phoneDigits, message);
 }
 
-/** Native app deep link — often opens the WhatsApp app chat faster on phones. */
+/** Native app deep link - often opens the WhatsApp app chat faster on phones. */
 export function whatsAppAppLink(phoneDigits: string, message: string): string {
   const text = String(message || '').trim();
   if (!text) return `whatsapp://send?phone=${phoneDigits}`;
@@ -185,8 +185,6 @@ export function defaultMedicineMessage(
   medicineNo?: number
 ) {
   const med =
-    medicineNo != null && medicineNo !== undefined
-      ? `\n\nMedicine reference: #${medicineNo}`
-      : '';
+    medicineNo != null && medicineNo !== undefined ? `\n\nMedicine reference: #${medicineNo}` : '';
   return `Dear ${patientName},\n\nPlease find your medicine details from ${clinic}.${med}\n\nThank you.`;
 }

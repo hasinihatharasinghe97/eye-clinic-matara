@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type ClinicStats } from '../api';
-import { diseaseFormTitle } from '../diseaseForms/catalog';
+import { api, type ClinicStats } from '@/lib/api';
+import { diseaseFormTitle } from '@/diseaseForms/catalog';
 import {
   ChartCard,
   MonthLineChart,
   SimpleBarChart,
   SimplePieChart,
   StatKpis,
-} from '../charts/ChartWidgets';
-import { EmptyState, LoadingBlock } from '../components/PageNav';
-import { useToast } from '../components/Toast';
-import { DateInput } from '../components/DateInput';
+} from '@/components/charts/ChartWidgets';
+import { Button, EmptyState, LoadingBlock } from '@/components/ui';
+import { useToast } from '@/components/Toast';
+import { DateInput } from '@/components/DateInput';
+import { errorMessage } from '@/lib/errors';
+import { formatDate } from '@/lib/format';
 
 const MAX_DIAGNOSIS_BARS = 12;
 
@@ -18,23 +20,13 @@ function labelCondition(id: string) {
   return diseaseFormTitle(id);
 }
 
-function formatDay(isoDay: string) {
-  const [y, m, d] = isoDay.split('-').map(Number);
-  if (!y || !m || !d) return isoDay;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function periodLabel(fromDate: string, toDate: string) {
   if (fromDate && toDate) {
-    if (fromDate === toDate) return formatDay(fromDate);
-    return `${formatDay(fromDate)} – ${formatDay(toDate)}`;
+    if (fromDate === toDate) return formatDate(fromDate);
+    return `${formatDate(fromDate)} - ${formatDate(toDate)}`;
   }
-  if (fromDate) return `From ${formatDay(fromDate)}`;
-  if (toDate) return `Until ${formatDay(toDate)}`;
+  if (fromDate) return `From ${formatDate(fromDate)}`;
+  if (toDate) return `Until ${formatDate(toDate)}`;
   return 'All time';
 }
 
@@ -61,7 +53,7 @@ export function StatsPage() {
       .catch((err) => {
         if (cancelled) return;
         setLoadFailed(true);
-        toast.error(err instanceof Error ? err.message : 'Failed to load stats');
+        toast.error(errorMessage(err, 'Failed to load stats'));
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -128,9 +120,9 @@ export function StatsPage() {
               aria-label="Stats to date"
             />
           </label>
-          <button
-            className="btn secondary"
-            type="button"
+          <Button
+            variant="secondary"
+
             disabled={!hasPeriod}
             onClick={() => {
               setFromDate('');
@@ -138,7 +130,7 @@ export function StatsPage() {
             }}
           >
             All time
-          </button>
+          </Button>
         </div>
       </div>
 

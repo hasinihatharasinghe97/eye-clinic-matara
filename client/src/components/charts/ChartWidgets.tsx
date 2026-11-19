@@ -62,7 +62,11 @@ export function StatKpis({
         <div className="stat-kpi" key={item.label}>
           <div className="stat-kpi-value">{item.value}</div>
           <div className="stat-kpi-label">{item.label}</div>
-          {item.hint && <div className="muted" style={{ fontSize: '0.8rem' }}>{item.hint}</div>}
+          {item.hint && (
+            <div className="muted" style={{ fontSize: '0.8rem' }}>
+              {item.hint}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -80,7 +84,14 @@ export function SimpleBarChart({ data, color = COLORS[0] }: { data: Point[]; col
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2ddd2" />
-        <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={slanted ? -25 : 0} textAnchor={slanted ? 'end' : 'middle'} height={axisHeight} />
+        <XAxis
+          dataKey="name"
+          tick={{ fontSize: 11 }}
+          interval={0}
+          angle={slanted ? -25 : 0}
+          textAnchor={slanted ? 'end' : 'middle'}
+          height={axisHeight}
+        />
         <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} />
         <Tooltip />
         <Bar dataKey="value" fill={color} radius={[6, 6, 0, 0]} />
@@ -194,13 +205,7 @@ export function MetricLineChart({
         <XAxis dataKey="date" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} width={42} unit={unit ? '' : undefined} />
         <Tooltip formatter={(value) => [String(value) + (unit ? ` ${unit}` : ''), 'Value']} />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={COLORS[0]}
-          fill="#e4f2ec"
-          strokeWidth={2}
-        />
+        <Area type="monotone" dataKey="value" stroke={COLORS[0]} fill="#e4f2ec" strokeWidth={2} />
       </AreaChart>
     </ResponsiveContainer>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type ChartPoint, type PatientCharts } from '../api';
+import { api, type ChartPoint, type PatientCharts } from '@/lib/api';
 import {
   ActivityBarChart,
   ChartCard,
@@ -7,10 +7,11 @@ import {
   MonthLineChart,
   StatKpis,
   VisionLineChart,
-} from '../charts/ChartWidgets';
-import { DISTANCE_SCALE, NEAR_SCALE, type VisionScale } from '../charts/visionScale';
-import { EmptyState } from '../components/PageNav';
-import { useToast } from '../components/Toast';
+} from '@/components/charts/ChartWidgets';
+import { DISTANCE_SCALE, NEAR_SCALE, type VisionScale } from '@/components/charts/visionScale';
+import { EmptyState } from '@/components/ui';
+import { useToast } from '@/components/Toast';
+import { errorMessage } from '@/lib/errors';
 
 type Props = {
   patientId: string;
@@ -102,7 +103,7 @@ export function PatientChartsPanel({ patientId }: Props) {
       })
       .catch((err) => {
         setLoadFailed(true);
-        toast.error(err instanceof Error ? err.message : 'Failed to load charts');
+        toast.error(errorMessage(err, 'Failed to load charts'));
       })
       .finally(() => setBusy(false));
   }, [patientId, toast]);
@@ -180,9 +181,9 @@ export function PatientChartsPanel({ patientId }: Props) {
       <div className="card">
         <h3 style={{ marginTop: 0 }}>How to chart improvement</h3>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Record distance vision (with pinhole), near vision, contrast (1–10), color vision, and IOP (R/L) on each{' '}
-          <strong>screening visit</strong> (Visits tab). Progress-tab scores (0–10) and disease
-          assessment numbers (CMT, CSGS, HbA1c, SRF) also appear below.
+          Record distance vision (with pinhole), near vision, contrast (1–10), color vision, and IOP
+          (R/L) on each <strong>screening visit</strong> (Visits tab). Progress-tab scores (0–10)
+          and disease assessment numbers (CMT, CSGS, HbA1c, SRF) also appear below.
         </p>
       </div>
 
@@ -200,7 +201,7 @@ export function PatientChartsPanel({ patientId }: Props) {
 
         <ChartCard
           title="Pinhole (PH) improvement"
-          subtitle="Distance VA with pinhole — R ph vs L ph (6/6 = 1 best … PL = 11 worst; - = blind)"
+          subtitle="Distance VA with pinhole - R ph vs L ph (6/6 = 1 best … PL = 11 worst; - = blind)"
           empty={phCompare.length === 0}
           emptyText="Add R ph / L ph distance vision on Visits screening forms to see this chart."
         >
@@ -222,7 +223,7 @@ export function PatientChartsPanel({ patientId }: Props) {
 
         <ChartCard
           title="Color vision (R vs L)"
-          subtitle="Color vision score (1–30) — Right vs Left"
+          subtitle="Color vision score (1–30) - Right vs Left"
           empty={colorCompare.length === 0}
           emptyText="Set R and L color vision on Visits screening forms to see this chart."
         >
@@ -244,7 +245,7 @@ export function PatientChartsPanel({ patientId }: Props) {
 
         <ChartCard
           title="Eye pressure"
-          subtitle="IOP mmHg — from Visits and/or disease assessments"
+          subtitle="IOP mmHg - from Visits and/or disease assessments"
           empty={pressureCompare.length === 0 && (data.series.iop || []).length === 0}
           emptyText="Enter IOP on a Visit or assessment to see this chart."
         >
@@ -287,11 +288,7 @@ export function PatientChartsPanel({ patientId }: Props) {
             <label className="muted" htmlFor="metric-select">
               Metric
             </label>
-            <select
-              id="metric-select"
-              value={metric}
-              onChange={(e) => setMetric(e.target.value)}
-            >
+            <select id="metric-select" value={metric} onChange={(e) => setMetric(e.target.value)}>
               {metricOptions.map((m) => (
                 <option key={m.key} value={m.key}>
                   {m.label} ({m.count})

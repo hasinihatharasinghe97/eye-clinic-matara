@@ -1,37 +1,23 @@
 import { useEffect, useState } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import {
-  api,
-  localClinicDate,
-  type DailyAttendancePatient,
-  type MonthlyReport,
-} from '../api';
-import { EmptyState, LoadingBlock } from '../components/PageNav';
-import { PAGE_SIZE_OPTIONS, Pagination } from '../components/Pagination';
-import { useToast } from '../components/Toast';
-import { DateInput, MonthInput } from '../components/DateInput';
+import { api, localClinicDate, type DailyAttendancePatient, type MonthlyReport } from '@/lib/api';
+import { Button, EmptyState, LoadingBlock } from '@/components/ui';
+import { PAGE_SIZE_OPTIONS, Pagination } from '@/components/Pagination';
+import { useToast } from '@/components/Toast';
+import { DateInput, MonthInput } from '@/components/DateInput';
+import { errorMessage } from '@/lib/errors';
+import { formatDate, formatMonth } from '@/lib/format';
 
 type SortKey = 'visitDate' | 'name' | 'age' | 'opdAdNo' | 'address';
 type SortDir = 'asc' | 'desc';
 
 const PDF_PAGE_SIZE = PAGE_SIZE_OPTIONS[PAGE_SIZE_OPTIONS.length - 1];
 
-function formatDisplayDate(isoDay: string) {
-  const [y, m, d] = isoDay.split('-').map(Number);
-  if (!y || !m || !d) return isoDay;
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function rangeLabel(fromDate: string, toDate: string) {
-  if (fromDate === toDate) return formatDisplayDate(fromDate);
-  // ASCII only — jsPDF default fonts cannot render →
-  return `${formatDisplayDate(fromDate)} to ${formatDisplayDate(toDate)}`;
+  if (fromDate === toDate) return formatDate(fromDate, { weekday: true });
+  // ASCII only - jsPDF default fonts cannot render →
+  return `${formatDate(fromDate, { weekday: true })} to ${formatDate(toDate, { weekday: true })}`;
 }
 
 function downloadDailyPdf(fromDate: string, toDate: string, rows: DailyAttendancePatient[]) {
@@ -107,12 +93,6 @@ function downloadDailyPdf(fromDate: string, toDate: string, rows: DailyAttendanc
   doc.save(file);
 }
 
-function monthLabel(month: string) {
-  const [y, m] = month.split('-').map(Number);
-  if (!y || !m) return month;
-  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
-}
-
 function downloadMonthlyPdf(report: MonthlyReport) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const total = report.totals.patients;
@@ -138,7 +118,7 @@ function downloadMonthlyPdf(report: MonthlyReport) {
   doc.text('Nethraloka Ayurvedic Eye Clinic', 14, 16);
   doc.setFontSize(11);
   doc.setTextColor(60);
-  doc.text(`Monthly attendance report - ${monthLabel(report.month)}`, 14, 23);
+  doc.text(`Monthly attendance report - ${formatMonth(report.month)}`, 14, 23);
   doc.setFontSize(9);
   doc.text(
     `Patients attended: ${total}    Attendance days: ${report.totals.attendanceDays}`,
@@ -201,7 +181,11 @@ function downloadMonthlyPdf(report: MonthlyReport) {
     ]),
     styles: { fontSize: 8.5, cellPadding: 1.8 },
     headStyles,
-    columnStyles: { 0: { cellWidth: 9 }, 2: { cellWidth: 11 }, 6: { cellWidth: 11, halign: 'right' } },
+    columnStyles: {
+      0: { cellWidth: 9 },
+      2: { cellWidth: 11 },
+      6: { cellWidth: 11, halign: 'right' },
+    },
     didDrawPage: footer,
   });
 
@@ -226,7 +210,7 @@ function MonthlyReportCard() {
       .catch((err) => {
         if (cancelled) return;
         setReport(null);
-        toast.error(err instanceof Error ? err.message : 'Failed to load monthly report');
+        toast.error(errorMessage(err, 'Failed to load monthly report'));
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -244,7 +228,8 @@ function MonthlyReportCard() {
         <div>
           <h3 style={{ margin: 0 }}>Monthly report</h3>
           <p className="muted" style={{ margin: '0.25rem 0 0', fontSize: '0.85rem' }}>
-            Patients who attended in the month, counted by age group and by district (worked out from the address).
+            Patients who attended in the month, counted by age group and by district (worked out
+            from the address).
           </p>
         </div>
         <div className="page-toolbar-actions">
@@ -252,14 +237,12 @@ function MonthlyReportCard() {
             <span className="muted">Month</span>
             <MonthInput value={month} max={localClinicDate().slice(0, 7)} onChange={setMonth} />
           </label>
-          <button
-            className="btn"
-            type="button"
+          <Button
             disabled={busy || !report || total === 0}
             onClick={() => report && downloadMonthlyPdf(report)}
           >
             Download monthly PDF
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -268,12 +251,12 @@ function MonthlyReportCard() {
       ) : !report || total === 0 ? (
         <EmptyState
           title="No attendance this month"
-          hint={`Nobody was marked Visited in ${monthLabel(month)}.`}
+          hint={`Nobody was marked Visited in ${formatMonth(month)}.`}
         />
       ) : (
         <>
           <p style={{ margin: '0 0 0.75rem' }}>
-            <strong>{monthLabel(report.month)}</strong> · {total} patients ·{' '}
+            <strong>{formatMonth(report.month)}</strong> · {total} patients ·{' '}
             {report.totals.attendanceDays} attendance days
           </p>
           <div className="grid-2">
@@ -358,7 +341,9 @@ function DailyReport() {
   const [rows, setRows] = useState<DailyAttendancePatient[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(
+    PAGE_SIZE_OPTIONS[0]
+  );
   const [sortKey, setSortKey] = useState<SortKey>('visitDate');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [busy, setBusy] = useState(true);
@@ -393,7 +378,7 @@ function DailyReport() {
         setRows([]);
         setTotal(0);
         setLoadFailed(true);
-        toast.error(err instanceof Error ? err.message : 'Failed to load attendance');
+        toast.error(errorMessage(err, 'Failed to load attendance'));
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -418,7 +403,7 @@ function DailyReport() {
       const allRows = await fetchAllAttendanceRows(rangeFrom, rangeTo, sortKey, sortDir);
       downloadDailyPdf(rangeFrom, rangeTo, allRows);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not create PDF');
+      toast.error(errorMessage(err, 'Could not create PDF'));
     } finally {
       setPdfBusy(false);
     }
@@ -453,9 +438,9 @@ function DailyReport() {
               onChange={(e) => setToDate(e.target.value || localClinicDate())}
             />
           </label>
-          <button
-            className="btn secondary"
-            type="button"
+          <Button
+            variant="secondary"
+
             onClick={() => {
               const t = localClinicDate();
               setFromDate(t);
@@ -463,15 +448,10 @@ function DailyReport() {
             }}
           >
             Today
-          </button>
-          <button
-            className="btn"
-            type="button"
-            disabled={busy || pdfBusy || total === 0}
-            onClick={handleDownloadPdf}
-          >
+          </Button>
+          <Button disabled={busy || pdfBusy || total === 0} onClick={handleDownloadPdf}>
             {pdfBusy ? 'Preparing…' : 'Download PDF'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -533,11 +513,11 @@ function DailyReport() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={`${r.id}-${r.visitDate}`}>
-                    {multiDay && <td>{r.visitDate}</td>}
+                    {multiDay && <td>{formatDate(r.visitDate)}</td>}
                     <td>{r.name}</td>
-                    <td>{r.age != null ? r.age : '—'}</td>
-                    <td>{r.opdAdNo || '—'}</td>
-                    <td>{r.address || '—'}</td>
+                    <td>{r.age != null ? r.age : '-'}</td>
+                    <td>{r.opdAdNo || '-'}</td>
+                    <td>{r.address || '-'}</td>
                   </tr>
                 ))}
               </tbody>

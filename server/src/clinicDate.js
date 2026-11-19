@@ -1,16 +1,16 @@
-/** Clinic calendar timezone (Nethraloka — Matara, Sri Lanka). */
+/** Clinic calendar timezone (Nethraloka - Matara, Sri Lanka). */
 export const CLINIC_TZ = 'Asia/Colombo';
 export const CLINIC_OFFSET = '+05:30';
 
 /**
- * Storage formats (use these everywhere — do not mix UTC / local / bare strings):
+ * Storage formats (use these everywhere - do not mix UTC / local / bare strings):
  * - Calendar day:  YYYY-MM-DD
  * - Date-time:     YYYY-MM-DDTHH:mm:ss+05:30
  */
 
 /**
  * Calendar day YYYY-MM-DD in the clinic timezone.
- * Never use Date#toISOString().slice(0, 10) for this — that is UTC and is wrong
+ * Never use Date#toISOString().slice(0, 10) for this - that is UTC and is wrong
  * for ~5.5 hours each night in Sri Lanka (midnight–05:29).
  */
 export function clinicCalendarDate(d = new Date()) {

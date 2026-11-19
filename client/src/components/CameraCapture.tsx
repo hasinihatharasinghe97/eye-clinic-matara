@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './Toast';
+import { errorMessage } from '@/lib/errors';
+import { Button } from '@/components/ui';
 
 type Props = {
   open: boolean;
@@ -83,11 +85,13 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
       } catch (err) {
         const name = err instanceof DOMException ? err.name : '';
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-          failCamera('Camera permission denied. Allow camera access in the browser, then try again.');
+          failCamera(
+            'Camera permission denied. Allow camera access in the browser, then try again.'
+          );
         } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
           failCamera('No camera was found on this device.');
         } else {
-          const msg = err instanceof Error ? err.message : 'Could not open camera';
+          const msg = errorMessage(err, 'Could not open camera');
           failCamera(`Could not open camera: ${msg}`);
         }
       }
@@ -164,9 +168,9 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
       <div className="camera-modal">
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
           <h3 style={{ margin: 0 }}>Take photo</h3>
-          <button className="btn secondary" type="button" onClick={onClose} disabled={busy}>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
             Close
-          </button>
+          </Button>
         </div>
 
         <div className="camera-viewport">
@@ -180,37 +184,33 @@ export function CameraCapture({ open, busy, onClose, onCapture }: Props) {
         <div className="row" style={{ marginTop: '0.85rem', justifyContent: 'center' }}>
           {!previewUrl ? (
             <>
-              <button
-                className="btn secondary"
-                type="button"
+              <Button
+                variant="secondary"
+
                 disabled={busy || Boolean(cameraBlocked && !streamRef.current)}
                 onClick={() => setFacingMode((m) => (m === 'environment' ? 'user' : 'environment'))}
               >
                 Flip camera
-              </button>
-              <button
-                className="btn"
-                type="button"
-                disabled={busy || cameraBlocked}
-                onClick={takePhoto}
-              >
+              </Button>
+              <Button disabled={busy || cameraBlocked} onClick={takePhoto}>
                 Capture
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button className="btn secondary" type="button" disabled={busy} onClick={retake}>
+              <Button variant="secondary" disabled={busy} onClick={retake}>
                 Retake
-              </button>
-              <button className="btn" type="button" disabled={busy || !blob} onClick={() => void save()}>
+              </Button>
+              <Button disabled={busy || !blob} onClick={() => void save()}>
                 {busy ? 'Saving…' : 'Save photo'}
-              </button>
+              </Button>
             </>
           )}
         </div>
 
         <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.82rem' }}>
-          Allow camera access when the browser asks. On phones, “Upload image” can also open the camera.
+          Allow camera access when the browser asks. On phones, “Upload image” can also open the
+          camera.
         </p>
       </div>
     </div>

@@ -10,7 +10,7 @@
  *
  * How changes are found: after every sync the MD5 fingerprint of every row on each side
  * is stored (the "base"). Comparing a side's current fingerprints with its base tells
- * exactly which rows that side changed, added or deleted since the last sync — no
+ * exactly which rows that side changed, added or deleted since the last sync - no
  * schema changes or edit tracking in the app are needed. Fingerprints are computed by
  * MySQL, so only rows that actually changed travel over the connection.
  *

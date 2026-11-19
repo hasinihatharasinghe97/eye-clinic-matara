@@ -7,43 +7,44 @@ import {
   type Patient,
   type ProgressLog,
   type Visit,
-  withAuth,
-} from '../api';
-import { diseaseFormTitle } from '../diseaseForms/catalog';
-import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
+} from '@/lib/api';
+import { diseaseFormTitle } from '@/diseaseForms/catalog';
+import { useDiseaseForms } from '@/diseaseForms/DiseaseFormsContext';
 import { PatientChartsPanel } from './PatientCharts';
-import { CameraCapture } from '../components/CameraCapture';
-import { SendMedicineWhatsApp } from '../components/SendMedicineWhatsApp';
-import { EmptyState, LoadingBlock } from '../components/PageNav';
-import { PAGE_SIZE_OPTIONS, Pagination } from '../components/Pagination';
-import { useToast } from '../components/Toast';
-import { useConfirm } from '../components/ConfirmDialog';
-import { VisitTodayTick } from '../components/VisitTodayTick';
-import { VisitTimeline } from '../components/VisitTimeline';
-import { DateInput } from '../components/DateInput';
-
-function formatWhen(value: string) {
-  if (!value) return '—';
-  // Keep YYYY-MM-DD as a calendar day (avoid UTC Date parsing shifting the day)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, day] = value.split('-').map(Number);
-    return new Date(y, m - 1, day).toLocaleDateString();
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
-}
+import { CameraCapture } from '@/components/CameraCapture';
+import { SendMedicineWhatsApp } from '@/components/SendMedicineWhatsApp';
+import { Button, EmptyState, LoadingBlock, Tabs, type TabItem } from '@/components/ui';
+import { PATIENT_TAB_LABELS } from '@/app/routes';
+import { PAGE_SIZE_OPTIONS, Pagination } from '@/components/Pagination';
+import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
+import { VisitTodayTick } from '@/components/VisitTodayTick';
+import { VisitTimeline } from '@/components/VisitTimeline';
+import { DateInput } from '@/components/DateInput';
+import { errorMessage } from '@/lib/errors';
+import { formatDate, formatDateTime } from '@/lib/format';
 
 function formatIop(iop: Visit['iop']): string {
-  if (!iop) return '—';
+  if (!iop) return '-';
   if (typeof iop === 'object') {
-    const r = iop.r?.trim() || '—';
-    const l = iop.l?.trim() || '—';
-    if (r === '—' && l === '—') return '—';
+    const r = iop.r?.trim() || '-';
+    const l = iop.l?.trim() || '-';
+    if (r === '-' && l === '-') return '-';
     return `R ${r} / L ${l}`;
   }
   return String(iop);
 }
+
+type PatientTab = 'visits' | 'diseases' | 'charts' | 'progress' | 'images' | 'whatsapp';
+
+const PATIENT_TABS: ReadonlyArray<TabItem<PatientTab>> = (
+  ['visits', 'diseases', 'charts', 'progress', 'images', 'whatsapp'] as const
+).map((key) => ({ key, label: PATIENT_TAB_LABELS[key] }));
+
+const VISIT_VIEWS: ReadonlyArray<TabItem<'list' | 'timeline'>> = [
+  { key: 'list', label: 'List' },
+  { key: 'timeline', label: 'All visits by section' },
+];
 
 type Props = {
   patientId: string;
@@ -75,25 +76,18 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
   const [visitedToday, setVisitedToday] = useState(false);
   const [togglingVisit, setTogglingVisit] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(
+    PAGE_SIZE_OPTIONS[0]
+  );
   const [listTotal, setListTotal] = useState(0);
   const [tabLoading, setTabLoading] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [visitView, setVisitView] = useState<'list' | 'timeline'>('list');
   const today = localClinicDate();
 
-  const active =
-    tab === 'progress'
-      ? 'progress'
-      : tab === 'images'
-        ? 'images'
-        : tab === 'charts'
-          ? 'charts'
-          : tab === 'whatsapp'
-            ? 'whatsapp'
-            : tab === 'diseases'
-              ? 'diseases'
-              : 'visits';
+  const active: PatientTab = PATIENT_TABS.some((t) => t.key === tab)
+    ? (tab as PatientTab)
+    : 'visits';
 
   useEffect(() => {
     setNewFormType('');
@@ -114,7 +108,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
     } catch (err) {
       setPatient(null);
       setLoadFailed(true);
-      toast.error(err instanceof Error ? err.message : 'Failed to load patient');
+      toast.error(errorMessage(err, 'Failed to load patient'));
     }
   }, [patientId, today, toast]);
 
@@ -157,7 +151,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
         setListTotal(res.total);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load list');
+      toast.error(errorMessage(err, 'Failed to load list'));
     } finally {
       setTabLoading(false);
     }
@@ -170,7 +164,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       setVisitedToday(next);
       setPatient((p) => (p ? { ...p, visitedToday: next } : p));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update visit mark');
+      toast.error(errorMessage(err, 'Could not update visit mark'));
     } finally {
       setTogglingVisit(false);
     }
@@ -222,7 +216,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
       });
       await fetchTabList();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save progress');
+      toast.error(errorMessage(err, 'Could not save progress'));
     }
   }
 
@@ -237,7 +231,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
         setPage(1);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(errorMessage(err, 'Upload failed'));
     } finally {
       setUploading(false);
     }
@@ -281,7 +275,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
           <div>
             <h2 style={{ margin: 0 }}>{patient.name}</h2>
             <p className="muted" style={{ margin: '0.35rem 0 0' }}>
-              OPD {patient.opdAdNo || '—'} · {patient.age ?? '—'} yrs · {patient.gender || '—'} ·{' '}
+              OPD {patient.opdAdNo || '-'} · {patient.age ?? '-'} yrs · {patient.gender || '-'} ·{' '}
               {patient.phone || 'no phone'}
             </p>
             {patient.address && (
@@ -298,52 +292,45 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               <VisitTodayTick
                 checked={visitedToday}
                 disabled={togglingVisit}
-                label={`Visited clinic today (${today})`}
+                label={`Visited clinic today (${formatDate(today)})`}
                 onChange={toggleVisitedToday}
               />
             </div>
           </div>
           <div className="patient-header-actions">
-            <button
-              className="btn secondary"
-              type="button"
-              onClick={() => onNavigate('/')}
-            >
-              ← Patients
-            </button>
-            <button
-              className="btn secondary"
-              type="button"
+            <Button
+              variant="secondary"
+
               onClick={() => onNavigate(`/patients/${patientId}/edit`)}
             >
               Edit details
-            </button>
-            <button
-              className="btn secondary"
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+
               disabled={pdfBusy}
               onClick={async () => {
                 setPdfBusy(true);
                 try {
-                  const { downloadPatientProfilePdf } = await import('../patientPdf');
+                  const { downloadPatientProfilePdf } = await import('@/lib/patientPdf');
                   await downloadPatientProfilePdf(patient);
                 } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Could not create PDF');
+                  toast.error(errorMessage(err, 'Could not create PDF'));
                 } finally {
                   setPdfBusy(false);
                 }
               }}
             >
               {pdfBusy ? 'Preparing PDF…' : 'Download full PDF'}
-            </button>
-            <button
-              className="btn danger"
-              type="button"
+            </Button>
+            <Button
+              variant="danger-outline"
+
               onClick={async () => {
                 const ok = await confirm({
                   title: 'Delete patient?',
-                  message: `Delete patient ${patient.name}? This cannot be undone.`,
-                  confirmLabel: 'Delete',
+                  message: `Delete ${patient.name} (OPD ${patient.opdAdNo || '-'}) and all of their visits, assessments, progress notes and images? This cannot be undone.`,
+                  confirmLabel: 'Delete patient',
                   danger: true,
                 });
                 if (!ok) return;
@@ -352,60 +339,22 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                   toast.success(`Patient “${patient.name}” deleted.`);
                   onNavigate('/');
                 } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Could not delete patient');
+                  toast.error(errorMessage(err, 'Could not delete patient'));
                 }
               }}
             >
-              Delete
-            </button>
+              Delete patient
+            </Button>
           </div>
         </div>
       </div>
 
-      <div className="tabs">
-        <button
-          type="button"
-          className={active === 'visits' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/visits`)}
-        >
-          Visits
-        </button>
-        <button
-          type="button"
-          className={active === 'diseases' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/diseases`)}
-        >
-          Assessments
-        </button>
-        <button
-          type="button"
-          className={active === 'charts' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/charts`)}
-        >
-          Charts
-        </button>
-        <button
-          type="button"
-          className={active === 'progress' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/progress`)}
-        >
-          Progress
-        </button>
-        <button
-          type="button"
-          className={active === 'images' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/images`)}
-        >
-          Images
-        </button>
-        <button
-          type="button"
-          className={active === 'whatsapp' ? 'active' : ''}
-          onClick={() => onNavigate(`/patients/${patientId}/whatsapp`)}
-        >
-          WhatsApp
-        </button>
-      </div>
+      <Tabs
+        label="Patient sections"
+        items={PATIENT_TABS}
+        active={active}
+        onChange={(key) => onNavigate(`/patients/${patientId}/${key}`)}
+      />
 
       {active === 'visits' && (
         <div className="card">
@@ -414,38 +363,22 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               <h3 style={{ margin: 0 }}>Eye screening forms</h3>
               <p className="muted" style={{ margin: '0.35rem 0 0', fontSize: '0.85rem' }}>
                 General eye check / findings form. Used when you need a fuller exam: diagnosis, IOP,
-                contrast, etc. Optional — for a normal clinic day, use <strong>Visited today</strong>{' '}
-                instead. One general visit record, not disease-specific.
+                contrast, etc. Optional - for a normal clinic day, use{' '}
+                <strong>Visited today</strong> instead. One general visit record, not
+                disease-specific.
               </p>
             </div>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => onNavigate(`/patients/${patientId}/visits/new`)}
-            >
+            <Button onClick={() => onNavigate(`/patients/${patientId}/visits/new`)}>
               Add screening form
-            </button>
+            </Button>
           </div>
           {listTotal > 0 && (
-            <div className="tabs" role="tablist" aria-label="Screening forms view">
-              {(
-                [
-                  ['list', 'List'],
-                  ['timeline', 'All visits by section'],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={visitView === key}
-                  className={visitView === key ? 'active' : ''}
-                  onClick={() => setVisitView(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <Tabs
+              label="Screening forms view"
+              items={VISIT_VIEWS}
+              active={visitView}
+              onChange={setVisitView}
+            />
           )}
           {listTotal > 0 && visitView === 'timeline' ? (
             <VisitTimeline
@@ -458,68 +391,62 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             <EmptyState
               title="No screening forms yet"
               hint="Mark Visited today for normal clinic days. Add a screening form only when you need full eye findings."
-              actionLabel="Add screening form"
-              onAction={() => onNavigate(`/patients/${patientId}/visits/new`)}
             />
           ) : (
             <>
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Diagnosis</th>
-                    <th>IOP</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visits.map((v) => (
-                    <tr key={v.id}>
-                      <td>{v.visitDate}</td>
-                      <td>{v.diagnosis || '—'}</td>
-                      <td>{formatIop(v.iop)}</td>
-                      <td className="row">
-                        <button
-                          className="btn secondary"
-                          type="button"
-                          onClick={() =>
-                            onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)
-                          }
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn danger"
-                          type="button"
-                          onClick={async () => {
-                            const ok = await confirm({
-                              title: 'Delete visit?',
-                              message: 'Delete this visit? This cannot be undone.',
-                              confirmLabel: 'Delete',
-                              danger: true,
-                            });
-                            if (!ok) return;
-                            try {
-                              await api.deleteVisit(patientId, v.id);
-                              toast.success('Visit deleted.');
-                              await fetchTabList();
-                            } catch (err) {
-                              toast.error(
-                                err instanceof Error ? err.message : 'Could not delete visit'
-                              );
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Diagnosis</th>
+                      <th>IOP</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination {...paginationProps} />
+                  </thead>
+                  <tbody>
+                    {visits.map((v) => (
+                      <tr key={v.id}>
+                        <td>{formatDate(v.visitDate)}</td>
+                        <td>{v.diagnosis || '-'}</td>
+                        <td>{formatIop(v.iop)}</td>
+                        <td className="row">
+                          <Button
+                            variant="secondary"
+
+                            onClick={() => onNavigate(`/patients/${patientId}/visits/${v.id}/edit`)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="danger-outline"
+
+                            onClick={async () => {
+                              const ok = await confirm({
+                                title: 'Delete visit?',
+                                message: 'Delete this visit? This cannot be undone.',
+                                confirmLabel: 'Delete',
+                                danger: true,
+                              });
+                              if (!ok) return;
+                              try {
+                                await api.deleteVisit(patientId, v.id);
+                                toast.success('Visit deleted.');
+                                await fetchTabList();
+                              } catch (err) {
+                                toast.error(errorMessage(err, 'Could not delete visit'));
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination {...paginationProps} />
             </>
           )}
         </div>
@@ -531,8 +458,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             <h3>New assessment</h3>
             <p className="muted">
               Disease-specific forms (cataract, DR, ARMD, CME, and others). Fill a new assessment
-              each review visit to track improvement. Use Visited today for ordinary attendance days,
-              and Visits for a general eye screening exam.
+              each review visit to track improvement. Use Visited today for ordinary attendance
+              days, and Visits for a general eye screening exam.
             </p>
             {patientConditions.length === 0 && (
               <p className="warn-banner">
@@ -561,9 +488,7 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                   </option>
                 ))}
               </select>
-              <button
-                className="btn"
-                type="button"
+              <Button
                 disabled={!newFormType}
                 onClick={() =>
                   onNavigate(
@@ -572,33 +497,31 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 }
               >
                 New assessment
-              </button>
+              </Button>
             </div>
             <div className="check-grid" style={{ marginTop: '1rem' }}>
               {availableForms.map((f) => (
-                <button
+                <Button
                   key={f.id}
-                  type="button"
-                  className="btn secondary"
+
+                  variant="secondary"
                   onClick={() =>
-                    onNavigate(
-                      `/patients/${patientId}/diseases/${encodeURIComponent(f.id)}/new`
-                    )
+                    onNavigate(`/patients/${patientId}/diseases/${encodeURIComponent(f.id)}/new`)
                   }
                 >
                   {f.shortTitle}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
 
           <div className="card">
-            <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <div
+              className="row"
+              style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}
+            >
               <h3 style={{ margin: 0 }}>Saved assessments</h3>
-              <select
-                value={filterFormType}
-                onChange={(e) => setFilterFormType(e.target.value)}
-              >
+              <select value={filterFormType} onChange={(e) => setFilterFormType(e.target.value)}>
                 <option value="">All forms</option>
                 {DISEASE_FORMS.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -613,67 +536,63 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               <p className="empty">No disease assessments yet.</p>
             ) : (
               <>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Form</th>
-                      <th>Eye</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assessments.map((a) => (
-                      <tr key={a.id}>
-                        <td>{formatWhen(a.assessmentDate)}</td>
-                        <td>{diseaseFormTitle(a.formType)}</td>
-                        <td>{a.eye || '—'}</td>
-                        <td className="row">
-                          <button
-                            className="btn secondary"
-                            type="button"
-                            onClick={() =>
-                              onNavigate(
-                                `/patients/${patientId}/diseases/${encodeURIComponent(a.formType)}/${a.id}/edit`
-                              )
-                            }
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn danger"
-                            type="button"
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: 'Delete assessment?',
-                                message: 'Delete this assessment? This cannot be undone.',
-                                confirmLabel: 'Delete',
-                                danger: true,
-                              });
-                              if (!ok) return;
-                              try {
-                                await api.deleteDiseaseAssessment(patientId, a.id);
-                                toast.success('Assessment deleted.');
-                                await fetchTabList();
-                              } catch (err) {
-                                toast.error(
-                                  err instanceof Error
-                                    ? err.message
-                                    : 'Could not delete assessment'
-                                );
-                              }
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </td>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Form</th>
+                        <th>Eye</th>
+                        <th></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <Pagination {...paginationProps} />
+                    </thead>
+                    <tbody>
+                      {assessments.map((a) => (
+                        <tr key={a.id}>
+                          <td>{formatDate(a.assessmentDate)}</td>
+                          <td>{diseaseFormTitle(a.formType)}</td>
+                          <td>{a.eye || '-'}</td>
+                          <td className="row">
+                            <Button
+                              variant="secondary"
+
+                              onClick={() =>
+                                onNavigate(
+                                  `/patients/${patientId}/diseases/${encodeURIComponent(a.formType)}/${a.id}/edit`
+                                )
+                              }
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="danger-outline"
+
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: 'Delete assessment?',
+                                  message: 'Delete this assessment? This cannot be undone.',
+                                  confirmLabel: 'Delete',
+                                  danger: true,
+                                });
+                                if (!ok) return;
+                                try {
+                                  await api.deleteDiseaseAssessment(patientId, a.id);
+                                  toast.success('Assessment deleted.');
+                                  await fetchTabList();
+                                } catch (err) {
+                                  toast.error(errorMessage(err, 'Could not delete assessment'));
+                                }
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination {...paginationProps} />
               </>
             )}
           </div>
@@ -737,9 +656,9 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
                 />
               </div>
             </div>
-            <button className="btn" type="submit" style={{ marginTop: '0.75rem' }}>
+            <Button type="submit" style={{ marginTop: '0.75rem' }}>
               Add to timeline
-            </button>
+            </Button>
           </form>
 
           <div className="card">
@@ -750,60 +669,56 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
               <p className="empty">No progress rows yet.</p>
             ) : (
               <>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>R notes</th>
-                      <th>R score</th>
-                      <th>L notes</th>
-                      <th>L score</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logs.map((log) => (
-                      <tr key={log.id}>
-                        <td>{log.logDate}</td>
-                        <td>{log.rightEye || '—'}</td>
-                        <td>{log.rightScore ?? '—'}</td>
-                        <td>{log.leftEye || '—'}</td>
-                        <td>{log.leftScore ?? '—'}</td>
-                        <td>
-                          <button
-                            className="btn danger"
-                            type="button"
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: 'Delete progress entry?',
-                                message: 'Delete this progress entry? This cannot be undone.',
-                                confirmLabel: 'Delete',
-                                danger: true,
-                              });
-                              if (!ok) return;
-                              try {
-                                await api.deleteProgress(patientId, log.id);
-                                toast.success('Progress entry deleted.');
-                                await fetchTabList();
-                              } catch (err) {
-                                toast.error(
-                                  err instanceof Error
-                                    ? err.message
-                                    : 'Could not delete progress entry'
-                                );
-                              }
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </td>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>R notes</th>
+                        <th>R score</th>
+                        <th>L notes</th>
+                        <th>L score</th>
+                        <th></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <Pagination {...paginationProps} />
+                    </thead>
+                    <tbody>
+                      {logs.map((log) => (
+                        <tr key={log.id}>
+                          <td>{formatDate(log.logDate)}</td>
+                          <td>{log.rightEye || '-'}</td>
+                          <td>{log.rightScore ?? '-'}</td>
+                          <td>{log.leftEye || '-'}</td>
+                          <td>{log.leftScore ?? '-'}</td>
+                          <td>
+                            <Button
+                              variant="danger-outline"
+
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: 'Delete progress entry?',
+                                  message: 'Delete this progress entry? This cannot be undone.',
+                                  confirmLabel: 'Delete',
+                                  danger: true,
+                                });
+                                if (!ok) return;
+                                try {
+                                  await api.deleteProgress(patientId, log.id);
+                                  toast.success('Progress entry deleted.');
+                                  await fetchTabList();
+                                } catch (err) {
+                                  toast.error(errorMessage(err, 'Could not delete progress entry'));
+                                }
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination {...paginationProps} />
               </>
             )}
           </div>
@@ -815,15 +730,13 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <h3 style={{ margin: 0 }}>Report images</h3>
             <div className="row">
-              <button
-                className="btn"
-                type="button"
-                disabled={uploading}
-                onClick={() => setCameraOpen(true)}
-              >
+              <Button disabled={uploading} onClick={() => setCameraOpen(true)}>
                 Take photo
-              </button>
-              <label className="btn secondary" style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}>
+              </Button>
+              <label
+                className="btn secondary"
+                style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}
+              >
                 {uploading ? 'Saving…' : 'Upload image / PDF'}
                 <input
                   type="file"
@@ -836,8 +749,8 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             </div>
           </div>
           <p className="muted" style={{ marginTop: 0 }}>
-            Use <strong>Take photo</strong> to open the device camera, capture a report picture, then save it
-            to this patient.
+            Use <strong>Take photo</strong> to open the device camera, capture a report picture,
+            then save it to this patient.
           </p>
           {tabLoading && files.length === 0 ? (
             <LoadingBlock label="Loading images…" />
@@ -847,60 +760,58 @@ export function PatientDetail({ patientId, tab, onNavigate }: Props) {
             </p>
           ) : (
             <>
-            <div className="gallery">
-              {files.map((f) => (
-                <div className="gallery-item" key={f.id}>
-                  {f.mimeType?.startsWith('image/') ? (
-                    <a href={withAuth(f.url)} target="_blank" rel="noreferrer">
-                      <img src={withAuth(f.url)} alt={f.originalName} />
-                    </a>
-                  ) : (
-                    <div
-                      style={{
-                        height: 120,
-                        display: 'grid',
-                        placeItems: 'center',
-                        background: '#eee',
-                      }}
-                    >
-                      <a href={withAuth(f.url)} target="_blank" rel="noreferrer">
-                        PDF
+              <div className="gallery">
+                {files.map((f) => (
+                  <div className="gallery-item" key={f.id}>
+                    {f.mimeType?.startsWith('image/') ? (
+                      <a href={f.url} target="_blank" rel="noreferrer">
+                        <img src={f.url} alt={f.originalName} />
                       </a>
+                    ) : (
+                      <div
+                        style={{
+                          height: 120,
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: '#eee',
+                        }}
+                      >
+                        <a href={f.url} target="_blank" rel="noreferrer">
+                          PDF
+                        </a>
+                      </div>
+                    )}
+                    <div className="meta">
+                      <div title={f.originalName}>{f.originalName}</div>
+                      <div className="muted">{formatDateTime(f.createdAt)}</div>
+                      <Button
+                        variant="danger-outline"
+
+                        style={{ marginTop: '0.35rem' }}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: 'Delete file?',
+                            message: 'Delete this file? This cannot be undone.',
+                            confirmLabel: 'Delete',
+                            danger: true,
+                          });
+                          if (!ok) return;
+                          try {
+                            await api.deleteAttachment(patientId, f.id);
+                            toast.success('File deleted.');
+                            await fetchTabList();
+                          } catch (err) {
+                            toast.error(errorMessage(err, 'Could not delete file'));
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
                     </div>
-                  )}
-                  <div className="meta">
-                    <div title={f.originalName}>{f.originalName}</div>
-                    <div className="muted">{new Date(f.createdAt).toLocaleString()}</div>
-                    <button
-                      className="btn danger"
-                      type="button"
-                      style={{ marginTop: '0.35rem' }}
-                      onClick={async () => {
-                        const ok = await confirm({
-                          title: 'Delete file?',
-                          message: 'Delete this file? This cannot be undone.',
-                          confirmLabel: 'Delete',
-                          danger: true,
-                        });
-                        if (!ok) return;
-                        try {
-                          await api.deleteAttachment(patientId, f.id);
-                          toast.success('File deleted.');
-                          await fetchTabList();
-                        } catch (err) {
-                          toast.error(
-                            err instanceof Error ? err.message : 'Could not delete file'
-                          );
-                        }
-                      }}
-                    >
-                      Delete
-                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
-            <Pagination {...paginationProps} />
+                ))}
+              </div>
+              <Pagination {...paginationProps} />
             </>
           )}
           <CameraCapture

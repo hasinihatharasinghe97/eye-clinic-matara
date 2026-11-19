@@ -143,7 +143,7 @@ export async function uploadBackupBufferToDrive(buffer, { dateKey } = {}) {
         await drive.files.delete({ fileId: file.id, supportsAllDrives: true });
         console.log(`[gdrive] Deleted leftover Drive backup: ${file.name}`);
       } catch {
-        /* ignore — drive.file scope may not see files created elsewhere */
+        /* ignore - drive.file scope may not see files created elsewhere */
       }
     }
   } catch {
@@ -174,7 +174,7 @@ export async function createAndUploadDriveBackup(createBackupFn) {
   if (!isGoogleDriveConfigured()) {
     throw new Error('Google Drive backup is not configured');
   }
-  // persist:false — offsite Drive is enough; avoid doubling ZIP size inside HeatWave's 50GB.
+  // persist:false - offsite Drive is enough; avoid doubling ZIP size inside HeatWave's 50GB.
   const result = await createBackupFn({ persist: false });
   const upload = await uploadBackupBufferToDrive(result.buffer, {
     dateKey: getColomboClock().dateKey,

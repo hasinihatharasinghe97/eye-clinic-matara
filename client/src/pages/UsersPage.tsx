@@ -1,14 +1,28 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, type AppUser, type UserRole } from '../api';
-import { useToast } from '../components/Toast';
-import { useConfirm } from '../components/ConfirmDialog';
-import { EmptyState, LoadingBlock } from '../components/PageNav';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { api, type AppUser, type UserRole } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
+import {
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  LoadingBlock,
+  SelectField,
+  TextField,
+  type Column,
+} from '@/components/ui';
+import { formatDateTime } from '@/lib/format';
 
 const MIN_PASSWORD = 8;
 
-function errorText(err: unknown, fallback: string) {
-  return err instanceof Error ? err.message : fallback;
-}
+const ROLE_OPTIONS: ReadonlyArray<{ value: UserRole; label: string }> = [
+  { value: 'staff', label: 'Staff - patients, visits, reports, backups' },
+  { value: 'admin', label: 'Administrator - also manages users and settings' },
+];
+
+const roleName = (role: UserRole) => (role === 'admin' ? 'Administrator' : 'Staff');
 
 /** Change your own password. Used on this page and on the forced first-sign-in screen. */
 export function ChangePasswordForm({
@@ -24,7 +38,7 @@ export function ChangePasswordForm({
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (next.length < MIN_PASSWORD) {
       toast.error(`New password must be at least ${MIN_PASSWORD} characters.`);
@@ -43,7 +57,7 @@ export function ChangePasswordForm({
       toast.success('Password changed. You were signed out on other devices.');
       onChanged(user);
     } catch (err) {
-      toast.error(errorText(err, 'Could not change password'));
+      toast.error(errorMessage(err, 'Could not change password'));
     } finally {
       setBusy(false);
     }
@@ -51,45 +65,36 @@ export function ChangePasswordForm({
 
   return (
     <form onSubmit={submit}>
-      <div className="field">
-        <label htmlFor="pw-current">Current password</label>
-        <input
-          id="pw-current"
-          type="password"
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="pw-new">New password</label>
-        <input
-          id="pw-new"
-          type="password"
-          value={next}
-          onChange={(e) => setNext(e.target.value)}
-          autoComplete="new-password"
-          minLength={MIN_PASSWORD}
-          maxLength={200}
-          placeholder={`At least ${MIN_PASSWORD} characters`}
-          required
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="pw-confirm">Confirm new password</label>
-        <input
-          id="pw-confirm"
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          autoComplete="new-password"
-          required
-        />
-      </div>
-      <button className="btn" type="submit" disabled={busy} style={{ marginTop: '0.5rem' }}>
-        {busy ? 'Saving…' : submitLabel}
-      </button>
+      <TextField
+        label="Current password"
+        type="password"
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+        autoComplete="current-password"
+        required
+      />
+      <TextField
+        label="New password"
+        type="password"
+        value={next}
+        onChange={(e) => setNext(e.target.value)}
+        autoComplete="new-password"
+        minLength={MIN_PASSWORD}
+        maxLength={200}
+        placeholder={`At least ${MIN_PASSWORD} characters`}
+        required
+      />
+      <TextField
+        label="Confirm new password"
+        type="password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        autoComplete="new-password"
+        required
+      />
+      <Button type="submit" busy={busy} busyLabel="Saving…" style={{ marginTop: '0.5rem' }}>
+        {submitLabel}
+      </Button>
     </form>
   );
 }
@@ -102,7 +107,7 @@ function AddUserForm({ onAdded }: { onAdded: () => void }) {
   const [role, setRole] = useState<UserRole>('staff');
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
@@ -114,7 +119,7 @@ function AddUserForm({ onAdded }: { onAdded: () => void }) {
       setRole('staff');
       onAdded();
     } catch (err) {
-      toast.error(errorText(err, 'Could not add user'));
+      toast.error(errorMessage(err, 'Could not add user'));
     } finally {
       setBusy(false);
     }
@@ -122,46 +127,86 @@ function AddUserForm({ onAdded }: { onAdded: () => void }) {
 
   return (
     <form onSubmit={submit} className="users-add">
-      <div className="field">
-        <label htmlFor="nu-name">Full name</label>
-        <input id="nu-name" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={128} required />
+      <TextField
+        label="Full name"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        maxLength={128}
+        required
+      />
+      <TextField
+        label="Username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value.toLowerCase())}
+        pattern="[a-z0-9._\-]{3,32}"
+        title="3-32 characters: letters, numbers, dot, dash or underscore"
+        autoComplete="off"
+        required
+      />
+      <TextField
+        label="Temporary password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        minLength={MIN_PASSWORD}
+        maxLength={200}
+        autoComplete="new-password"
+        placeholder={`At least ${MIN_PASSWORD} characters`}
+        required
+      />
+      <SelectField
+        label="Role"
+        value={role}
+        onChange={(e) => setRole(e.target.value as UserRole)}
+        options={ROLE_OPTIONS}
+      />
+      <Button type="submit" busy={busy} busyLabel="Adding…">
+        Add user
+      </Button>
+    </form>
+  );
+}
+
+function ResetPasswordForm({
+  user,
+  onSubmit,
+  onCancel,
+}: {
+  user: AppUser;
+  onSubmit: (password: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [password, setPassword] = useState('');
+  return (
+    <form
+      className="users-reset"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        await onSubmit(password);
+      }}
+    >
+      <h4>Reset password for {user.fullName}</h4>
+      <p className="muted">
+        Give them this temporary password in person. They will be signed out everywhere and must
+        choose a new password when they next sign in.
+      </p>
+      <TextField
+        label="Temporary password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        minLength={MIN_PASSWORD}
+        maxLength={200}
+        autoComplete="new-password"
+        required
+        autoFocus
+      />
+      <div className="row">
+        <Button type="submit">Set temporary password</Button>
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
-      <div className="field">
-        <label htmlFor="nu-user">Username</label>
-        <input
-          id="nu-user"
-          value={username}
-          onChange={(e) => setUsername(e.target.value.toLowerCase())}
-          pattern="[a-z0-9._\-]{3,32}"
-          title="3–32 characters: letters, numbers, dot, dash or underscore"
-          autoComplete="off"
-          required
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="nu-pw">Temporary password</label>
-        <input
-          id="nu-pw"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={MIN_PASSWORD}
-          maxLength={200}
-          autoComplete="new-password"
-          placeholder={`At least ${MIN_PASSWORD} characters`}
-          required
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="nu-role">Role</label>
-        <select id="nu-role" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-          <option value="staff">Staff — patients, visits, reports, backups</option>
-          <option value="admin">Administrator — also manages users and settings</option>
-        </select>
-      </div>
-      <button className="btn" type="submit" disabled={busy}>
-        {busy ? 'Adding…' : 'Add user'}
-      </button>
     </form>
   );
 }
@@ -171,13 +216,12 @@ function ManageUsers({ me }: { me: AppUser }) {
   const { confirm } = useConfirm();
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [resetFor, setResetFor] = useState<AppUser | null>(null);
-  const [resetPw, setResetPw] = useState('');
 
   const load = useCallback(async () => {
     try {
       setUsers(await api.listUsers());
     } catch (err) {
-      toast.error(errorText(err, 'Could not load users'));
+      toast.error(errorMessage(err, 'Could not load users'));
     }
   }, [toast]);
 
@@ -185,170 +229,133 @@ function ManageUsers({ me }: { me: AppUser }) {
     void load();
   }, [load]);
 
+  /** Runs a change, shows the result, then reloads the list. */
   async function act(fn: () => Promise<unknown>, done: string) {
     try {
       await fn();
       toast.success(done);
       await load();
     } catch (err) {
-      toast.error(errorText(err, 'Action failed'));
+      toast.error(errorMessage(err, 'Action failed'));
     }
   }
 
-  async function submitReset(e: React.FormEvent) {
-    e.preventDefault();
-    if (!resetFor) return;
-    const target = resetFor;
-    await act(
-      () => api.resetUserPassword(target.id, resetPw),
-      `Temporary password set for ${target.fullName}. They must change it when they sign in.`
-    );
-    setResetFor(null);
-    setResetPw('');
+  async function deleteUser(u: AppUser) {
+    const ok = await confirm({
+      title: 'Delete user?',
+      message: `Delete ${u.fullName} (${u.username})? They will be signed out and can't sign in again. Patient records are not affected. To keep their account for later, use Disable instead.`,
+      confirmLabel: 'Delete user',
+      danger: true,
+    });
+    if (ok) await act(() => api.deleteUser(u.id), `Deleted ${u.fullName}.`);
   }
+
+  const columns: ReadonlyArray<Column<AppUser>> = [
+    {
+      key: 'name',
+      header: 'Name',
+      render: (u) => (
+        <>
+          {u.fullName}
+          {u.id === me.id && <span className="muted"> (you)</span>}
+        </>
+      ),
+    },
+    { key: 'username', header: 'Username', render: (u) => u.username },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (u) => (
+        <select
+          value={u.role}
+          disabled={u.id === me.id}
+          aria-label={`Role for ${u.fullName}`}
+          onChange={(e) => {
+            const role = e.target.value as UserRole;
+            void act(
+              () => api.updateUser(u.id, { role }),
+              `${u.fullName} is now ${roleName(role).toLowerCase()}.`
+            );
+          }}
+        >
+          <option value="staff">Staff</option>
+          <option value="admin">Administrator</option>
+        </select>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (u) =>
+        u.active ? (u.mustChangePassword ? 'Must change password' : 'Active') : 'Disabled',
+    },
+    {
+      key: 'lastLogin',
+      header: 'Last sign-in',
+      render: (u) => formatDateTime(u.lastLoginAt),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (u) =>
+        u.id === me.id ? null : (
+          <div className="row users-actions">
+            <Button variant="secondary" onClick={() => setResetFor(u)}>
+              Reset password
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                act(
+                  () => api.updateUser(u.id, { active: !u.active }),
+                  u.active
+                    ? `${u.fullName} can no longer sign in.`
+                    : `${u.fullName} can sign in again.`
+                )
+              }
+            >
+              {u.active ? 'Disable' : 'Enable'}
+            </Button>
+            <Button variant="danger-outline" onClick={() => void deleteUser(u)}>
+              Delete
+            </Button>
+          </div>
+        ),
+    },
+  ];
 
   return (
     <>
-      <div className="card">
-        <h3>Users</h3>
+      <Card title="Users">
         {users === null ? (
           <LoadingBlock label="Loading users…" />
         ) : users.length === 0 ? (
           <EmptyState title="No users" />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Username</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Last sign-in</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => {
-                  const self = u.id === me.id;
-                  return (
-                    <tr key={u.id}>
-                      <td>
-                        {u.fullName}
-                        {self && <span className="muted"> (you)</span>}
-                      </td>
-                      <td>{u.username}</td>
-                      <td>
-                        <select
-                          value={u.role}
-                          disabled={self}
-                          aria-label={`Role for ${u.fullName}`}
-                          onChange={(e) =>
-                            act(
-                              () => api.updateUser(u.id, { role: e.target.value as UserRole }),
-                              `${u.fullName} is now ${e.target.value === 'admin' ? 'an administrator' : 'staff'}.`
-                            )
-                          }
-                        >
-                          <option value="staff">Staff</option>
-                          <option value="admin">Administrator</option>
-                        </select>
-                      </td>
-                      <td>
-                        {u.active ? (u.mustChangePassword ? 'Must change password' : 'Active') : 'Disabled'}
-                      </td>
-                      <td>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}</td>
-                      <td>
-                        {!self && (
-                          <div className="row users-actions">
-                            <button className="btn secondary" type="button" onClick={() => setResetFor(u)}>
-                              Reset password
-                            </button>
-                            <button
-                              className="btn secondary"
-                              type="button"
-                              onClick={() =>
-                                act(
-                                  () => api.updateUser(u.id, { active: !u.active }),
-                                  u.active ? `${u.fullName} can no longer sign in.` : `${u.fullName} can sign in again.`
-                                )
-                              }
-                            >
-                              {u.active ? 'Disable' : 'Enable'}
-                            </button>
-                            <button
-                              className="btn danger"
-                              type="button"
-                              onClick={async () => {
-                                const ok = await confirm({
-                                  title: 'Delete user?',
-                                  message: `Delete ${u.fullName} (${u.username})? They will be signed out and can't sign in again. Patient records are not affected. To keep their account for later, use Disable instead.`,
-                                  confirmLabel: 'Delete user',
-                                  danger: true,
-                                });
-                                if (ok) await act(() => api.deleteUser(u.id), `Deleted ${u.fullName}.`);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable caption="Clinic users" columns={columns} rows={users} rowKey={(u) => u.id} />
         )}
         {resetFor && (
-          <form onSubmit={submitReset} className="users-reset">
-            <h4>Reset password for {resetFor.fullName}</h4>
-            <p className="muted">
-              Give them this temporary password in person. They will be signed out everywhere and must
-              choose a new password when they next sign in.
-            </p>
-            <div className="field">
-              <label htmlFor="rp-pw">Temporary password</label>
-              <input
-                id="rp-pw"
-                type="password"
-                value={resetPw}
-                onChange={(e) => setResetPw(e.target.value)}
-                minLength={MIN_PASSWORD}
-                maxLength={200}
-                autoComplete="new-password"
-                required
-                autoFocus
-              />
-            </div>
-            <div className="row">
-              <button className="btn" type="submit">
-                Set temporary password
-              </button>
-              <button
-                className="btn secondary"
-                type="button"
-                onClick={() => {
-                  setResetFor(null);
-                  setResetPw('');
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          <ResetPasswordForm
+            user={resetFor}
+            onCancel={() => setResetFor(null)}
+            onSubmit={async (password) => {
+              await act(
+                () => api.resetUserPassword(resetFor.id, password),
+                `Temporary password set for ${resetFor.fullName}. They must change it when they sign in.`
+              );
+              setResetFor(null);
+            }}
+          />
         )}
-      </div>
+      </Card>
 
-      <div className="card">
-        <h3>Add a user</h3>
+      <Card title="Add a user">
         <p className="muted">
-          Give each person their own account — never share one. Staff can work with patients, reports
-          and backups; administrators can also manage users and clinic settings.
+          Give each person their own account - never share one. Staff can work with patients,
+          reports and backups; administrators can also manage users and clinic settings.
         </p>
         <AddUserForm onAdded={load} />
-      </div>
+      </Card>
     </>
   );
 }
@@ -356,18 +363,16 @@ function ManageUsers({ me }: { me: AppUser }) {
 export function UsersPage({ me, onMeChanged }: { me: AppUser; onMeChanged: (u: AppUser) => void }) {
   return (
     <>
-      <div className="card">
-        <h3>My account</h3>
+      <Card title="My account">
         <p className="muted">
-          Signed in as <strong>{me.fullName}</strong> ({me.username}) ·{' '}
-          {me.role === 'admin' ? 'Administrator' : 'Staff'}
+          Signed in as <strong>{me.fullName}</strong> ({me.username}) · {roleName(me.role)}
         </p>
         <h4 style={{ marginBottom: '0.5rem' }}>Change my password</h4>
         <p className="muted" style={{ marginTop: 0 }}>
           Changing it signs you out on every other device.
         </p>
         <ChangePasswordForm onChanged={onMeChanged} />
-      </div>
+      </Card>
       {me.role === 'admin' && <ManageUsers me={me} />}
     </>
   );

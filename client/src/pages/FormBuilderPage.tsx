@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { api } from '../api';
-import { useDiseaseForms } from '../diseaseForms/DiseaseFormsContext';
-import { BUILTIN_DISEASE_FORMS } from '../diseaseForms/catalog';
-import type { FormField } from '../diseaseForms/types';
-import { LoadingBlock } from '../components/PageNav';
-import { useToast } from '../components/Toast';
-import { useConfirm } from '../components/ConfirmDialog';
+import { api } from '@/lib/api';
+import { useDiseaseForms } from '@/diseaseForms/DiseaseFormsContext';
+import { BUILTIN_DISEASE_FORMS } from '@/diseaseForms/catalog';
+import type { FormField } from '@/diseaseForms/types';
+import { Button, LoadingBlock } from '@/components/ui';
+import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
+import { errorMessage } from '@/lib/errors';
 
 const MAX_QUESTIONS = 15;
 
@@ -54,7 +55,7 @@ function slugify(value: string) {
     .slice(0, 40);
 }
 
-/** Empty question row — labels stay blank; hints go in placeholders. */
+/** Empty question row - labels stay blank; hints go in placeholders. */
 function blankQuestion(kind: QuestionKind = 'text'): Question {
   return {
     id: uid(),
@@ -64,7 +65,7 @@ function blankQuestion(kind: QuestionKind = 'text'): Question {
   };
 }
 
-/** Standard follow-up table — always included, no setup needed. */
+/** Standard follow-up table - always included, no setup needed. */
 function followUpField(): FormField {
   return {
     type: 'followup',
@@ -95,12 +96,15 @@ function questionsToFields(questions: Question[]): FormField[] {
     } else if (q.kind === 'notes') {
       fields.push({ type: 'textarea', key, label, rows: 3 });
     } else if (q.kind === 'number') {
-      const chartKey =
-        /iop/i.test(label) ? 'iop'
-        : /\bcmt\b/i.test(label) ? 'cmt'
-        : /hba1c|hb\s*a1c/i.test(label) ? 'hba1c'
-        : /srf/i.test(label) ? 'srfHeight'
-        : key;
+      const chartKey = /iop/i.test(label)
+        ? 'iop'
+        : /\bcmt\b/i.test(label)
+          ? 'cmt'
+          : /hba1c|hb\s*a1c/i.test(label)
+            ? 'hba1c'
+            : /srf/i.test(label)
+              ? 'srfHeight'
+              : key;
       fields.push({
         type: 'number',
         key: chartKey,
@@ -248,7 +252,7 @@ export function FormBuilderPage({ onNavigate }: Props) {
       }
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save form');
+      toast.error(errorMessage(err, 'Could not save form'));
     } finally {
       setBusy(false);
     }
@@ -273,7 +277,7 @@ export function FormBuilderPage({ onNavigate }: Props) {
       toast.success(`Deleted “${form.shortTitle}”.`);
       if (editingId === id) setMode('list');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not delete form';
+      const msg = errorMessage(err, 'Could not delete form');
       if (/assessment/i.test(msg)) {
         const ok = await confirm({
           title: 'Delete anyway?',
@@ -298,9 +302,9 @@ export function FormBuilderPage({ onNavigate }: Props) {
       <form className="card simple-form-builder" onSubmit={save}>
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
           <h2 style={{ margin: 0 }}>{isNew ? 'New disease form' : 'Edit disease form'}</h2>
-          <button className="btn secondary" type="button" onClick={() => setMode('list')}>
+          <Button variant="secondary" onClick={() => setMode('list')}>
             ← Back
-          </button>
+          </Button>
         </div>
 
         <div className="field">
@@ -331,7 +335,9 @@ export function FormBuilderPage({ onNavigate }: Props) {
                 value={q.label}
                 onChange={(e) =>
                   setQuestions((list) =>
-                    list.map((item) => (item.id === q.id ? { ...item, label: e.target.value } : item))
+                    list.map((item) =>
+                      item.id === q.id ? { ...item, label: e.target.value } : item
+                    )
                   )
                 }
                 placeholder={LABEL_PLACEHOLDER[q.kind]}
@@ -342,9 +348,7 @@ export function FormBuilderPage({ onNavigate }: Props) {
                 onChange={(e) =>
                   setQuestions((list) =>
                     list.map((item) =>
-                      item.id === q.id
-                        ? { ...item, kind: e.target.value as QuestionKind }
-                        : item
+                      item.id === q.id ? { ...item, kind: e.target.value as QuestionKind } : item
                     )
                   )
                 }
@@ -356,15 +360,15 @@ export function FormBuilderPage({ onNavigate }: Props) {
                   </option>
                 ))}
               </select>
-              <button
-                className="btn danger"
-                type="button"
+              <Button
+                variant="danger-outline"
+
                 title="Remove"
                 disabled={questions.length <= 1}
                 onClick={() => setQuestions((list) => list.filter((item) => item.id !== q.id))}
               >
                 ×
-              </button>
+              </Button>
               {q.kind === 'checklist' && (
                 <input
                   className="simple-q-choices"
@@ -395,15 +399,15 @@ export function FormBuilderPage({ onNavigate }: Props) {
               ['date', '+ Date'],
             ] as const
           ).map(([kind, label]) => (
-            <button
+            <Button
               key={kind}
-              className="btn secondary"
-              type="button"
+              variant="secondary"
+
               disabled={atLimit}
               onClick={() => addQuestion(kind)}
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
         {atLimit && (
@@ -433,21 +437,21 @@ export function FormBuilderPage({ onNavigate }: Props) {
         </div>
 
         <div className="form-actions">
-          <button className="btn" type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy}>
             {busy ? 'Saving…' : isNew ? 'Create form' : 'Save'}
-          </button>
-          <button className="btn secondary" type="button" onClick={() => setMode('list')}>
+          </Button>
+          <Button variant="secondary" onClick={() => setMode('list')}>
             Cancel
-          </button>
+          </Button>
           {editingId && (
-            <button
-              className="btn danger"
-              type="button"
+            <Button
+              variant="danger-outline"
+
               disabled={busy}
               onClick={() => void remove(editingId)}
             >
               Delete
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -464,9 +468,7 @@ export function FormBuilderPage({ onNavigate }: Props) {
               Add a form for a new disease in a few steps. The 12 clinic PDF forms stay unchanged.
             </p>
           </div>
-          <button className="btn" type="button" onClick={startNew}>
-            New disease form
-          </button>
+          <Button onClick={startNew}>New disease form</Button>
         </div>
       </div>
 
@@ -493,21 +495,24 @@ export function FormBuilderPage({ onNavigate }: Props) {
                       <strong>{f.shortTitle}</strong>
                     </td>
                     <td>
-                      {(f.fields || []).filter((x) => x.type !== 'section' && x.type !== 'followup')
-                        .length}
+                      {
+                        (f.fields || []).filter(
+                          (x) => x.type !== 'section' && x.type !== 'followup'
+                        ).length
+                      }
                     </td>
                     <td className="row">
-                      <button className="btn secondary" type="button" onClick={() => startEdit(f.id)}>
+                      <Button variant="secondary" onClick={() => startEdit(f.id)}>
                         Edit
-                      </button>
-                      <button
-                        className="btn danger"
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="danger-outline"
+
                         disabled={busy}
                         onClick={() => void remove(f.id)}
                       >
                         Delete
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -519,7 +524,9 @@ export function FormBuilderPage({ onNavigate }: Props) {
 
       <div className="card">
         <details>
-          <summary className="muted">Built-in forms ({BUILTIN_DISEASE_FORMS.length}) — view only</summary>
+          <summary className="muted">
+            Built-in forms ({BUILTIN_DISEASE_FORMS.length}) - view only
+          </summary>
           <ul className="builtin-form-list" style={{ marginTop: '0.75rem' }}>
             {BUILTIN_DISEASE_FORMS.map((f) => (
               <li key={f.id}>{f.shortTitle}</li>
@@ -527,9 +534,9 @@ export function FormBuilderPage({ onNavigate }: Props) {
           </ul>
         </details>
         <div style={{ marginTop: '0.85rem' }}>
-          <button className="btn secondary" type="button" onClick={() => onNavigate('/')}>
+          <Button variant="secondary" onClick={() => onNavigate('/')}>
             ← Patients
-          </button>
+          </Button>
         </div>
       </div>
     </>

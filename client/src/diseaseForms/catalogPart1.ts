@@ -203,11 +203,7 @@ const diabeticRetinopathy: DiseaseFormDef = {
       'Hard exudates (circinate pattern)',
       'Cotton wool spots',
     ]),
-    checks('ischaemic', 'Ischaemic changes', [
-      'Venous beading',
-      'IRMA',
-      'Capillary non-perfusion',
-    ]),
+    checks('ischaemic', 'Ischaemic changes', ['Venous beading', 'IRMA', 'Capillary non-perfusion']),
     checks('pdr', 'PDR features', [
       'NVD',
       'NVE',
@@ -276,11 +272,7 @@ const diabeticRetinopathy: DiseaseFormDef = {
       'Pan-retinal photocoagulation (PRP)',
       'Pars plana vitrectomy (PPV)',
     ]),
-    checks('monitoring', 'Monitoring', [
-      'OCT follow-up',
-      'Fundus photography',
-      'FFA if required',
-    ]),
+    checks('monitoring', 'Monitoring', ['OCT follow-up', 'Fundus photography', 'FFA if required']),
     checks('redFlags', 'Red flags', [
       'Vitreous haemorrhage',
       'Rapid vision loss',

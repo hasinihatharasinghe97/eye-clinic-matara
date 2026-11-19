@@ -8,8 +8,10 @@
   --accent-soft: #e4f2ec;
   --danger: #9b2c2c;
   --warn: #8a5a00;
-  --radius: 10px;
-  --font: "Segoe UI", "Noto Sans", sans-serif;
+  --radius: 12px;
+  --line-soft: #e6e1d6;
+  --shadow: 0 1px 2px rgba(28, 42, 34, 0.04), 0 2px 8px rgba(28, 42, 34, 0.05);
+  --font: 'Segoe UI', 'Noto Sans', sans-serif;
 }
 
 * {
@@ -87,6 +89,7 @@ textarea {
 .brand strong {
   font-size: 1.15rem;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .brand span {
@@ -96,7 +99,7 @@ textarea {
 
 .nav-links {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.25rem;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -106,20 +109,35 @@ textarea {
   color: var(--ink);
   background: none;
   border: none;
+  border-radius: 8px;
   cursor: pointer;
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.nav-links a:hover,
+.nav-links button.linkish:hover {
+  background: rgba(15, 107, 76, 0.07);
+  text-decoration: none;
 }
 
 .nav-links a.active {
   color: var(--accent);
+  background: var(--accent-soft);
   font-weight: 600;
+}
+
+.nav-links button.linkish {
+  color: var(--muted);
 }
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.2rem;
   margin-bottom: 1rem;
 }
 
@@ -343,11 +361,8 @@ textarea {
     width: 100%;
   }
 
-  .page-toolbar-actions .btn,
-  .patient-header-actions .btn {
+  .page-toolbar-actions .btn {
     flex: 1 1 calc(50% - 0.25rem);
-    min-height: 44px;
-    justify-content: center;
   }
 
   .patient-header {
@@ -355,12 +370,11 @@ textarea {
   }
 
   .search {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
   }
 
   .search-clear {
-    min-height: 44px;
+    min-height: 40px;
   }
 
   .table-wrap {
@@ -373,17 +387,16 @@ textarea {
     min-width: 480px;
   }
 
-  .btn,
   .field input,
   .field select,
   .field textarea,
   .search input {
-    font-size: 16px; /* reduces iOS zoom-on-focus */
+    font-size: 16px; /* stops iPhone zooming in when a field is tapped */
   }
 
   .btn {
-    min-height: 44px;
-    padding: 0.55rem 0.9rem;
+    min-height: 40px;
+    padding: 0.45rem 0.85rem;
   }
 
   .card {
@@ -449,15 +462,6 @@ textarea {
     width: min(260px, 78vw);
   }
 
-  .page-nav-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .btn-back {
-    min-height: 44px;
-  }
-
   .medicine-grid {
     max-width: none;
     gap: 2px;
@@ -500,6 +504,8 @@ textarea {
 @media (min-width: 721px) {
   .topbar-main {
     width: auto;
+    /* Keep the clinic name on one line; the menu wraps below it when space runs out. */
+    flex: 0 0 auto;
   }
 
   .nav-links {
@@ -527,7 +533,8 @@ textarea {
 .field textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0.5rem 0.65rem;
+  padding: 0.45rem 0.65rem;
+  min-height: 36px;
   background: #fff;
   color: var(--ink);
 }
@@ -549,26 +556,63 @@ textarea {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 34px;
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
   border-radius: 8px;
-  padding: 0.45rem 0.85rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .btn:hover {
-  filter: brightness(1.05);
+  background: #0c5a40;
+  border-color: #0c5a40;
+  text-decoration: none;
 }
 
 .btn.secondary {
   background: #fff;
   color: var(--accent);
+  border-color: #b9d4c8;
+}
+
+.btn.secondary:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .btn.danger {
   background: var(--danger);
   border-color: var(--danger);
+}
+
+.btn.danger:hover {
+  background: #7f2323;
+  border-color: #7f2323;
+}
+
+/* Destructive but not the main action: outlined so it doesn't compete with Edit/Save. */
+.btn.danger-outline {
+  background: #fff;
+  color: var(--danger);
+  border-color: #e3bcbc;
+}
+
+.btn.danger-outline:hover {
+  background: #fbeeee;
 }
 
 .btn:disabled {
@@ -583,8 +627,11 @@ textarea {
   align-items: center;
 }
 
+/* Base .search comes after the mobile media rules, so the input sizing lives here. */
 .search input {
   flex: 1;
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0.55rem 0.75rem;
@@ -614,15 +661,29 @@ textarea {
 .table th,
 .table td {
   text-align: left;
-  padding: 0.55rem 0.4rem;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+
+.table tbody tr.clickable-row:hover td {
+  background: var(--accent-soft);
 }
 
 .table th {
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom-color: var(--line);
+}
+
+/* Buttons inside table rows: a size smaller so rows stay compact. */
+.table .btn {
+  min-height: 30px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.82rem;
 }
 
 .muted {
@@ -789,10 +850,12 @@ textarea {
 }
 
 .tabs button {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   background: #fff;
   border-radius: 999px;
-  padding: 0.35rem 0.8rem;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.88rem;
+  color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1227,22 +1290,41 @@ textarea {
 }
 
 .page-nav {
-  margin: -0.35rem 0 1rem;
-  padding: 0.65rem 0.85rem;
-  background: rgba(255, 253, 248, 0.9);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  margin: -0.25rem 0 0.9rem;
 }
 
 .page-nav-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.65rem 1rem;
+  gap: 0.25rem 0.75rem;
 }
 
-.btn-back {
+/* "‹ Back": a quiet text link with a divider, not a big button. */
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   flex-shrink: 0;
+  padding: 0.25rem 0.75rem 0.25rem 0.1rem;
+  border: none;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.page-back span {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.page-back:hover {
+  color: #0c5a40;
+  text-decoration: underline;
 }
 
 .breadcrumbs {
@@ -1258,7 +1340,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.15rem 0;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
 .breadcrumbs li {
@@ -1268,9 +1350,17 @@ textarea {
 }
 
 .crumb-sep {
-  color: var(--muted);
-  margin-right: 0.35rem;
+  color: #a3ab9f;
+  margin: 0 0.05rem 0 0.35rem;
   user-select: none;
+}
+
+.breadcrumbs a {
+  color: var(--muted);
+}
+
+.breadcrumbs a:hover {
+  color: var(--accent);
 }
 
 .crumb-current {
@@ -1769,4 +1859,119 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   margin-top: 1rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
+}
+
+/* ---- UX polish ---- */
+
+/* Phone patient list: one card per patient (no card inside a card), whole card tappable. */
+.mobile-list-card .mobile-list-item {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+  position: relative;
+  padding-right: 1.25rem;
+}
+
+.mobile-list-card .mobile-list-item::after {
+  content: '›';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.mobile-list-card:has(.mobile-list-item:active) {
+  background: var(--accent-soft);
+}
+
+@media (max-width: 720px) {
+  .brand strong {
+    white-space: normal;
+  }
+}
+
+/* ---- Shared UI components (components/ui) ---- */
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.card-header h3 {
+  margin: 0;
+}
+
+.card-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.field-hint,
+.field-error {
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+}
+
+.field [aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+/* Readable by screen readers, invisible on screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.notice {
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--line);
+}
+
+.notice-info {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: #b9dccd;
+}
+
+.notice-warning {
+  background: #fff6e5;
+  border-color: #e7c97a;
+  color: var(--warn);
+}
+
+.notice-error {
+  background: #fbeeee;
+  border-color: #e3b5b5;
+  color: var(--danger);
+}
+
+.notice-success {
+  background: var(--accent-soft);
+  border-color: #b9dccd;
+  color: var(--accent);
+}
+
+.login-first-field {
+  margin-top: 1rem;
 }

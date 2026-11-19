@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Patient } from '../api';
-import { openWhatsAppChat, toWhatsAppNumber } from '../whatsapp';
+import { api, type Patient } from '@/lib/api';
+import { openWhatsAppChat, toWhatsAppNumber } from '@/lib/whatsapp';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
+import { errorMessage } from '@/lib/errors';
+import { Button } from '@/components/ui';
 
 const MEDICINE_MAX = 500;
 
@@ -55,11 +57,9 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
     const next = marked ? [...sent, n] : sent.filter((x) => x !== n);
     try {
       await persistSent(next);
-      toast.success(
-        marked ? `Marked medicine #${n} as sent.` : `Cleared mark for medicine #${n}.`
-      );
+      toast.success(marked ? `Marked medicine #${n} as sent.` : `Cleared mark for medicine #${n}.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update medicine marks');
+      toast.error(errorMessage(err, 'Could not update medicine marks'));
     }
   }
 
@@ -92,7 +92,7 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
         `WhatsApp opened for +${waNumber}. Attach medicine PDF #${medicineNo} in the chat (paperclip). That number is marked as sent.`
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not open WhatsApp');
+      toast.error(errorMessage(err, 'Could not open WhatsApp'));
     } finally {
       setSending(false);
     }
@@ -123,8 +123,8 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
             {waNumber
               ? `Will open chat +${waNumber}`
               : patient.phone
-                ? 'Number on file could not be read — edit it here'
-                : 'No phone on patient record — type the WhatsApp number'}
+                ? 'Number on file could not be read - edit it here'
+                : 'No phone on patient record - type the WhatsApp number'}
           </span>
         </div>
 
@@ -156,32 +156,30 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
       </div>
 
       <div className="row" style={{ marginTop: '0.85rem', flexWrap: 'wrap' }}>
-        <button
-          className="btn"
-          type="button"
+        <Button
           disabled={sending || busy || !waNumber || medicineNo === ''}
           onClick={() => void openChatAndMarkSent()}
         >
           {sending ? 'Opening…' : 'Open WhatsApp & mark sent'}
-        </button>
+        </Button>
         {medicineNo !== '' && (
           <>
-            <button
-              className="btn secondary"
-              type="button"
+            <Button
+              variant="secondary"
+
               disabled={sending || busy || savingGrid || alreadySent}
               onClick={() => void setMarked(medicineNo, true)}
             >
               Mark #{medicineNo} sent only
-            </button>
-            <button
-              className="btn secondary"
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+
               disabled={sending || busy || savingGrid || !alreadySent}
               onClick={() => void setMarked(medicineNo, false)}
             >
               Clear #{medicineNo}
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -197,7 +195,11 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
         <p className="muted" style={{ marginTop: 0, fontSize: '0.82rem' }}>
           Filled = already sent. Tap a number to select it, then open WhatsApp.
         </p>
-        <div className="medicine-grid" role="group" aria-label={`Medicine numbers 1 to ${MEDICINE_MAX}`}>
+        <div
+          className="medicine-grid"
+          role="group"
+          aria-label={`Medicine numbers 1 to ${MEDICINE_MAX}`}
+        >
           {numbers.map((n) => {
             const marked = sentSet.has(n);
             const selected = medicineNo === n;
@@ -207,9 +209,7 @@ export function SendMedicineWhatsApp({ patient, busy, onPatientUpdated }: Props)
                 type="button"
                 className={`medicine-cell${marked ? ' sent' : ''}${selected ? ' selected' : ''}`}
                 title={
-                  marked
-                    ? `Medicine #${n} already sent — tap to select`
-                    : `Select medicine #${n}`
+                  marked ? `Medicine #${n} already sent - tap to select` : `Select medicine #${n}`
                 }
                 disabled={sending || busy}
                 onClick={() => setMedicineNo(n)}

@@ -1,20 +1,17 @@
-import './polyfills';
+import '@/lib/polyfills';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import App from './App.tsx';
-import { DiseaseFormsProvider } from './diseaseForms/DiseaseFormsContext';
-import { ToastProvider } from './components/Toast';
-import { ConfirmProvider } from './components/ConfirmDialog';
+import App from '@/app/App';
+import { AppProviders } from '@/app/AppProviders';
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root');
+if (!root) throw new Error('Missing #root element in index.html');
+
+createRoot(root).render(
   <StrictMode>
-    <ToastProvider>
-      <ConfirmProvider>
-        <DiseaseFormsProvider>
-          <App />
-        </DiseaseFormsProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <AppProviders>
+      <App />
+    </AppProviders>
   </StrictMode>
 );

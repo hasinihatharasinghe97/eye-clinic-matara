@@ -9,7 +9,7 @@ const SECRET_KEY = 'auth_signing_secret';
 
 // ---------------------------------------------------------------------------
 // Signing secret: AUTH_SECRET env, else a random secret created once and kept in MySQL
-// (app_settings) — never in a file — so logins survive restarts.
+// (app_settings) - never in a file - so logins survive restarts.
 // ---------------------------------------------------------------------------
 
 let signingKeyPromise = null;
@@ -99,27 +99,84 @@ export async function verifyToken(token) {
   return safeEqual(sig, expected) ? user : null;
 }
 
-/**
- * <img src>, <a href> and file downloads can't send headers, so ?access_token= is
- * accepted — but only for GET requests that fetch files, never for the data API.
- */
-function queryTokenAllowed(req, p) {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
-  return p.startsWith('/uploads/') || /^\/api\/system\/backups\/[^/]+\/download$/.test(p);
-}
+// ---------------------------------------------------------------------------
+// Session cookie. The login token lives only in an HttpOnly cookie: page scripts can't
+// read it (so an injected script can't steal it), and the browser sends it by itself
+// with API calls, <img> and downloads - no token in URLs or localStorage.
+// ---------------------------------------------------------------------------
 
-function tokenFromRequest(req, p) {
-  const header = String(req.get('Authorization') || '');
-  if (header.startsWith('Bearer ')) return header.slice(7).trim();
-  if (queryTokenAllowed(req, p) && typeof req.query.access_token === 'string') {
-    return req.query.access_token;
+export const SESSION_COOKIE = 'ec_session';
+
+function readCookie(req, name) {
+  const header = String(req.headers.cookie || '');
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0 && part.slice(0, i).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(i + 1).trim());
+      } catch {
+        return '';
+      }
+    }
   }
   return '';
+}
+
+function cookieAttributes(req) {
+  return {
+    httpOnly: true,
+    // Strict: the browser never attaches the cookie to requests started by other sites.
+    sameSite: 'strict',
+    // HTTPS on Render; the clinic laptop / LAN runs on plain http, where Secure would drop it.
+    secure: Boolean(req.secure),
+    path: '/',
+  };
+}
+
+/** Sends the login cookie; it expires together with the token inside it. */
+export function setSessionCookie(req, res, token, expiresAt) {
+  res.cookie(SESSION_COOKIE, token, {
+    ...cookieAttributes(req),
+    maxAge: Math.max(0, expiresAt - Date.now()),
+  });
+}
+
+export function clearSessionCookie(req, res) {
+  res.clearCookie(SESSION_COOKIE, cookieAttributes(req));
+}
+
+function tokenFromRequest(req) {
+  // Bearer header kept for non-browser tools (scripts); the web app uses the cookie.
+  const header = String(req.get('Authorization') || '');
+  if (header.startsWith('Bearer ')) return header.slice(7).trim();
+  return readCookie(req, SESSION_COOKIE);
+}
+
+// ---------------------------------------------------------------------------
+// Cross-site request guard. With cookies, another website could try to make the
+// browser send a request to this app. Every change (POST/PUT/PATCH/DELETE) must carry
+// a custom header, which a browser only lets this app's own pages send (other sites
+// would need CORS permission, which they don't have). SameSite=Strict is the first line.
+// ---------------------------------------------------------------------------
+
+export const CSRF_HEADER = 'x-requested-with';
+export const CSRF_VALUE = 'eye-clinic';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+export function requireSameSiteRequest(req, res, next) {
+  const p = req.path.toLowerCase();
+  if (SAFE_METHODS.has(req.method) || !p.startsWith('/api/')) return next();
+  // External cron caller authenticates with its own secret header, not a cookie.
+  if (p.replace(/\/+$/, '') === '/api/system/cron/drive-backup') return next();
+  if (req.get(CSRF_HEADER) === CSRF_VALUE) return next();
+  console.warn(`[security] Blocked ${req.method} ${req.path} without the app header from ${req.ip}`);
+  res.status(403).json({ error: 'Request blocked. Please reload the page and try again.' });
 }
 
 const PUBLIC_API_PATHS = new Set([
   '/api/health',
   '/api/system/login',
+  '/api/system/logout', // only clears the cookie
   '/api/system/cron/drive-backup', // protected by BACKUP_CRON_SECRET
 ]);
 
@@ -134,8 +191,12 @@ export async function requireAuth(req, res, next) {
   const bare = p.replace(/\/+$/, '');
   if (!isProtected || PUBLIC_API_PATHS.has(bare)) return next();
   try {
-    const user = await verifyToken(tokenFromRequest(req, p));
-    if (!user) return res.status(401).json({ error: 'Please sign in again' });
+    const user = await verifyToken(tokenFromRequest(req));
+    if (!user) {
+      // Drop a stale or revoked cookie so the browser stops sending it.
+      if (readCookie(req, SESSION_COOKIE)) clearSessionCookie(req, res);
+      return res.status(401).json({ error: 'Please sign in again' });
+    }
     req.user = publicUser(user);
     if (req.user.mustChangePassword && !PASSWORD_CHANGE_PATHS.has(bare)) {
       return res

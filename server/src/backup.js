@@ -92,11 +92,11 @@ async function collectZipToBuffer() {
 
   archive.append(
     [
-      'Nethraloka Ayurvedic Eye Clinic — Backup ZIP',
+      'Nethraloka Ayurvedic Eye Clinic - Backup ZIP',
       '',
       'Contents:',
-      '  snapshot.json  — full database export (restore source)',
-      '  uploads/       — attached images and PDFs',
+      '  snapshot.json  - full database export (restore source)',
+      '  uploads/       - attached images and PDFs',
       '',
       'Restore (empty target MySQL recommended):',
       '  1. Unzip this file',
@@ -105,7 +105,7 @@ async function collectZipToBuffer() {
       '  4. node scripts/restore-from-backup.mjs <path-to-this-zip-or-folder>',
       '  5. See docs/HOSTING.md',
       '',
-      'Also keep a copy on Google Drive / USB — do not rely only on the server.',
+      'Also keep a copy on Google Drive / USB - do not rely only on the server.',
       `Created: ${clinicTimestamp()}`,
       '',
     ].join('\n'),

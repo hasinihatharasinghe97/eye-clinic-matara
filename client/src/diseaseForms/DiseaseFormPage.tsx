@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { api, type DiseaseAssessment } from '../api';
+import { clearLeaveGuard, useLeaveGuard } from '@/hooks/useLeaveGuard';
+import { api, type DiseaseAssessment } from '@/lib/api';
 import { useDiseaseForm } from './DiseaseFormsContext';
 import { FormFields } from './FormFields';
 import { nowDate, toDateValue } from './helpers';
 import type { FormDataMap } from './types';
-import { useToast } from '../components/Toast';
-import { DateInput } from '../components/DateInput';
+import { useToast } from '@/components/Toast';
+import { DateInput } from '@/components/DateInput';
+import { errorMessage } from '@/lib/errors';
+import { Button } from '@/components/ui';
 
 type Props = {
   patientId: string;
@@ -31,6 +34,8 @@ export function DiseaseFormPage({
   const [notes, setNotes] = useState('');
   const [data, setData] = useState<FormDataMap>({});
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  useLeaveGuard(dirty);
 
   useEffect(() => {
     if (!assessmentId) return;
@@ -42,18 +47,16 @@ export function DiseaseFormPage({
         setNotes(a.notes || '');
         setData(a.data || {});
       })
-      .catch((err) =>
-        toast.error(err instanceof Error ? err.message : 'Failed to load assessment')
-      );
+      .catch((err) => toast.error(errorMessage(err, 'Failed to load assessment')));
   }, [patientId, assessmentId, toast]);
 
   if (!def) {
     return (
       <div className="card">
         <p className="muted">Unknown disease form.</p>
-        <button className="btn secondary" type="button" onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel}>
           Back
-        </button>
+        </Button>
       </div>
     );
   }
@@ -74,22 +77,30 @@ export function DiseaseFormPage({
       } else {
         await api.createDiseaseAssessment(patientId, payload);
       }
+      clearLeaveGuard();
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed');
+      toast.error(errorMessage(err, 'Save failed'));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <form className="card" onSubmit={submit}>
+    <form
+      className="card"
+      onSubmit={submit}
+      onChange={() => setDirty(true)}
+      onClick={(e) => {
+        if ((e.target as Element).closest('svg, [data-marks-dirty]')) setDirty(true);
+      }}
+    >
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
         <div>
           <h2 style={{ margin: 0 }}>{def.title}</h2>
           <p className="muted" style={{ margin: '0.35rem 0 0' }}>
             {assessmentId ? 'Edit assessment' : 'New assessment'}
-            {patientName ? ` — ${patientName}` : ''}
+            {patientName ? ` - ${patientName}` : ''}
           </p>
         </div>
       </div>
@@ -124,12 +135,12 @@ export function DiseaseFormPage({
       </div>
 
       <div className="form-actions">
-        <button className="btn" type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? 'Saving…' : 'Save assessment'}
-        </button>
-        <button className="btn secondary" type="button" onClick={onCancel}>
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           ← Back without saving
-        </button>
+        </Button>
       </div>
     </form>
   );

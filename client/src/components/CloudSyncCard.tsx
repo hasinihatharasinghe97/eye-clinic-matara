@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type CloudSyncResult, type CloudSyncStatus } from '../api';
+import { api, type CloudSyncResult, type CloudSyncStatus } from '@/lib/api';
 import { useToast } from './Toast';
 import { useConfirm } from './ConfirmDialog';
+import { errorMessage } from '@/lib/errors';
+import { Button } from '@/components/ui';
+import { formatDateTime } from '@/lib/format';
 
 const TABLE_LABELS: Record<string, string> = {
   patients: 'patients',
@@ -18,14 +21,14 @@ const AUTO_OUTCOME: Record<string, string> = {
   offline: 'no internet',
   unstable: 'connection not stable yet, will retry',
   synced: 'synced',
-  blocked: 'paused — needs your decision',
+  blocked: 'paused - needs your decision',
   failed: 'did not finish, will retry',
   busy: 'another sync was running',
   'needs-setup': 'waiting for first-time setup',
 };
 
 function when(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString() : 'never';
+  return formatDateTime(value, 'never');
 }
 
 function resultSummary(r: CloudSyncResult) {
@@ -39,7 +42,7 @@ function resultSummary(r: CloudSyncResult) {
   if (down) parts.push(`${down} change(s) received from the online app`);
   if (r.files?.uploaded) parts.push(`${r.files.uploaded} photo(s) uploaded`);
   if (r.files?.downloaded) parts.push(`${r.files.downloaded} photo(s) downloaded`);
-  return parts.length ? parts.join(' · ') : 'Nothing to change — both were already the same.';
+  return parts.length ? parts.join(' · ') : 'Nothing to change - both were already the same.';
 }
 
 /**
@@ -59,7 +62,7 @@ export function CloudSyncCard() {
   }, []);
 
   useEffect(() => {
-    load().catch((err) => toast.error(err instanceof Error ? err.message : 'Could not load sync status'));
+    load().catch((err) => toast.error(errorMessage(err, 'Could not load sync status')));
   }, [load, toast]);
 
   const running = status?.configured && status.running;
@@ -106,7 +109,7 @@ export function CloudSyncCard() {
       await api.startCloudSync(force);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not start the sync');
+      toast.error(errorMessage(err, 'Could not start the sync'));
     } finally {
       setStarting(false);
     }
@@ -120,7 +123,8 @@ export function CloudSyncCard() {
   const changed = pending?.changedTables || [];
   // A record-number clash can't be fixed by forcing; only a mass delete can be confirmed.
   const canForce =
-    !running && (auto.blocked || (last && !last.ok && last.safety)) &&
+    !running &&
+    (auto.blocked || (last && !last.ok && last.safety)) &&
     !/same number/.test(auto.blocked || last?.error || '');
 
   return (
@@ -166,7 +170,8 @@ export function CloudSyncCard() {
         </p>
       ) : changed.length ? (
         <p className="warn-text">
-          Not yet in the online app: changes to {changed.map((t) => TABLE_LABELS[t] || t).join(', ')}.
+          Not yet in the online app: changes to{' '}
+          {changed.map((t) => TABLE_LABELS[t] || t).join(', ')}.
         </p>
       ) : (
         <p className="muted">Everything done on this laptop is already in the online app.</p>
@@ -174,7 +179,8 @@ export function CloudSyncCard() {
 
       {running ? (
         <p>
-          <strong>Syncing…</strong> {status.progress} <span className="muted">(keep the internet on)</span>
+          <strong>Syncing…</strong> {status.progress}{' '}
+          <span className="muted">(keep the internet on)</span>
         </p>
       ) : last && !last.ok ? (
         <p className="error">
@@ -183,18 +189,20 @@ export function CloudSyncCard() {
         </p>
       ) : last?.ok ? (
         <>
-          <p className="muted" style={{ margin: '0.25rem 0' }}>Last sync: {resultSummary(last)}</p>
+          <p className="muted" style={{ margin: '0.25rem 0' }}>
+            Last sync: {resultSummary(last)}
+          </p>
           {last.conflicts && last.conflicts.length > 0 && (
             <details className="muted" style={{ fontSize: '0.85rem' }}>
               <summary>
-                {last.conflicts.length} record(s) were changed both here and online — see which
+                {last.conflicts.length} record(s) were changed both here and online - see which
                 version was kept
               </summary>
               <ul>
                 {last.conflicts.map((c) => (
                   <li key={`${c.table}-${c.key}`}>
-                    {TABLE_LABELS[c.table] || c.table} #{c.key.replace('\u001f', ' ')}: {c.reason} — kept the{' '}
-                    {c.kept === 'laptop' ? 'laptop' : 'online'} version
+                    {TABLE_LABELS[c.table] || c.table} #{c.key.replace('\u001f', ' ')}: {c.reason} -
+                    kept the {c.kept === 'laptop' ? 'laptop' : 'online'} version
                   </li>
                 ))}
               </ul>
@@ -204,23 +212,18 @@ export function CloudSyncCard() {
       ) : null}
 
       <div className="row" style={{ flexWrap: 'wrap' }}>
-        <button
-          className="btn"
-          type="button"
-          disabled={Boolean(running) || starting}
-          onClick={() => void start(false)}
-        >
+        <Button disabled={Boolean(running) || starting} onClick={() => void start(false)}>
           {running ? 'Syncing…' : 'Sync now'}
-        </button>
+        </Button>
         {canForce && (
-          <button
-            className="btn danger"
-            type="button"
+          <Button
+            variant="danger"
+
             disabled={starting}
             onClick={() => void start(true)}
           >
             Sync anyway
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -264,10 +264,7 @@ const rvo: DiseaseFormDef = {
       'ESR / CRP',
     ]),
     section('Section B – Retinal vein occlusion (RVO)'),
-    checks('rvoPresentation', '9. Presentation', [
-      'Sudden / gradual vision loss',
-      'Unilateral',
-    ]),
+    checks('rvoPresentation', '9. Presentation', ['Sudden / gradual vision loss', 'Unilateral']),
     checks('rvoDiagnosis', '10. Diagnosis', ['CRVO', 'BRVO', 'Hemispheric']),
     checks('rvoType', '11. Type', ['Non-ischaemic', 'Ischaemic', 'Impending']),
     checks('rvoRisk', '12. Risk factors', [
@@ -291,13 +288,7 @@ const rvo: DiseaseFormDef = {
       'Extensive hemorrhage',
       'Capillary non-perfusion',
     ]),
-    checks('rvoInvestigations', '15. Investigations', [
-      'OCT',
-      'FFA',
-      'FAF',
-      'IOP',
-      'Visual field',
-    ]),
+    checks('rvoInvestigations', '15. Investigations', ['OCT', 'FFA', 'FAF', 'IOP', 'Visual field']),
     checks('rvoMgmt', '16. Management', [
       'Anti-VEGF',
       'Steroid',
@@ -311,17 +302,8 @@ const rvo: DiseaseFormDef = {
     checks('chronicHistory', '17. History', ['Previous RAO / RVO', 'Previous treatment']),
     text('chronicDuration', 'Duration'),
     text('chronicVa', 'VA'),
-    checks('visualStatus', '18. Visual status', [
-      'Stable',
-      'Worsening',
-      'Field defect',
-      'RAPD',
-    ]),
-    checks('anteriorSegment', '19. Anterior segment', [
-      'Cornea',
-      'Rubeosis iridis',
-      'Angle NV',
-    ]),
+    checks('visualStatus', '18. Visual status', ['Stable', 'Worsening', 'Field defect', 'RAPD']),
+    checks('anteriorSegment', '19. Anterior segment', ['Cornea', 'Rubeosis iridis', 'Angle NV']),
     num('iop', 'IOP', { unit: 'mmHg', min: 0, step: 'any' }),
     checks('raoSequelae', 'RAO sequelae', [
       'Optic atrophy',
@@ -379,11 +361,7 @@ const rp: DiseaseFormDef = {
       'X-linked',
       'Unknown',
     ]),
-    checks('familyHistory', 'B. Family history', [
-      'Positive',
-      'Negative',
-      'Consanguinity present',
-    ]),
+    checks('familyHistory', 'B. Family history', ['Positive', 'Negative', 'Consanguinity present']),
     checks('riskIndicators', 'C. Associated risk indicators', [
       'Childhood onset',
       'Progressive course',
@@ -442,12 +420,7 @@ const rp: DiseaseFormDef = {
       'Type I (Rod predominant)',
       'Type II (Rod + Cone involvement)',
     ]),
-    checks('ocularAssoc', 'Associated – ocular', [
-      'Myopia',
-      'Glaucoma',
-      'Keratoconus',
-      'Cataract',
-    ]),
+    checks('ocularAssoc', 'Associated – ocular', ['Myopia', 'Glaucoma', 'Keratoconus', 'Cataract']),
     checks('systemicSyndromes', 'Associated – systemic syndromes', [
       'Usher syndrome',
       'Laurence-Moon-Biedl',
@@ -473,10 +446,7 @@ const rp: DiseaseFormDef = {
       'OCT monitoring',
       'ERG (if needed)',
     ]),
-    checks('mgmtGenetic', 'Genetic / counseling', [
-      'Genetic counseling',
-      'Family screening',
-    ]),
+    checks('mgmtGenetic', 'Genetic / counseling', ['Genetic counseling', 'Family screening']),
     checks('redFlags', 'Red flags', [
       'Rapid central vision loss',
       'Severe CME',

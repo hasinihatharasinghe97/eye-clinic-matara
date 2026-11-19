@@ -5,6 +5,7 @@ import {
   issueToken,
   recordFailedAttempt,
   requireAdmin,
+  setSessionCookie,
   tooManyAttempts,
 } from '../auth.js';
 import {
@@ -57,8 +58,10 @@ router.put('/me/password', async (req, res) => {
   const updated = await setPassword(user.id, String(newPassword));
   forgetCachedUser(user.id);
   log(req, 'changed own password');
+  // Every other session is now invalid; give this browser a fresh cookie so it stays in.
   const { token, expiresAt } = await issueToken(updated);
-  res.json({ ok: true, token, expiresAt, user: publicUser(updated) });
+  setSessionCookie(req, res, token, expiresAt);
+  res.json({ ok: true, expiresAt, user: publicUser(updated) });
 });
 
 // ---------------------------------------------------------------------------

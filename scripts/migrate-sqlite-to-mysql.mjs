@@ -283,7 +283,7 @@ if (STORE_FILES && fs.existsSync(uploadsDir)) {
   console.log(`Stored ${n} file(s) in attachment_files.`);
 } else if (STORE_FILES) {
   console.log(
-    `STORE_FILES_IN_DB=1 but no uploads folder found at ${uploadsDir} — attachment metadata only.`
+    `STORE_FILES_IN_DB=1 but no uploads folder found at ${uploadsDir} - attachment metadata only.`
   );
 } else if (fs.existsSync(uploadsDir)) {
   console.log(

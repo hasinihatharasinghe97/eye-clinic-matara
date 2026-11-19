@@ -7,11 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api } from '../api';
-import {
-  BUILTIN_DISEASE_FORMS,
-  setCustomDiseaseForms,
-} from './catalog';
+import { api } from '@/lib/api';
+import { BUILTIN_DISEASE_FORMS, setCustomDiseaseForms } from './catalog';
 import type { DiseaseFormDef } from './types';
 
 type Ctx = {
@@ -71,9 +68,7 @@ export function DiseaseFormsProvider({ children }: { children: ReactNode }) {
     [customForms, ready, reload]
   );
 
-  return (
-    <DiseaseFormsContext.Provider value={value}>{children}</DiseaseFormsContext.Provider>
-  );
+  return <DiseaseFormsContext.Provider value={value}>{children}</DiseaseFormsContext.Provider>;
 }
 
 export function useDiseaseForms() {

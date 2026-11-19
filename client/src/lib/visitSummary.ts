@@ -1,5 +1,5 @@
 import { api, type Visit, type VisualFieldData } from './api';
-import { PAGE_SIZE_OPTIONS } from './components/Pagination';
+import { PAGE_SIZE_OPTIONS } from '@/components/Pagination';
 
 const FETCH_PAGE_SIZE = PAGE_SIZE_OPTIONS[PAGE_SIZE_OPTIONS.length - 1];
 
@@ -21,7 +21,13 @@ export async function fetchAllVisits(patientId: string) {
     return { ...r, items: r.visits };
   });
   return visits.sort((a, b) =>
-    a.visitDate < b.visitDate ? -1 : a.visitDate > b.visitDate ? 1 : a.createdAt < b.createdAt ? -1 : 1
+    a.visitDate < b.visitDate
+      ? -1
+      : a.visitDate > b.visitDate
+        ? 1
+        : a.createdAt < b.createdAt
+          ? -1
+          : 1
   );
 }
 

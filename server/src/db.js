@@ -729,7 +729,7 @@ export async function getPatientOpd(patientId) {
   await ensureIndex('idx_attendance_opd', 'clinic_attendance', 'opd_ad_no');
 }
 
-/** Convenience views for reporting — join / filter by OPD number. */
+/** Convenience views for reporting - join / filter by OPD number. */
 try {
   await exec(`
   CREATE OR REPLACE VIEW v_patients AS
@@ -895,7 +895,7 @@ function pathLooksUnusableOnThisPc(folder) {
   if (!currentUser || savedUser.toLowerCase() === currentUser.toLowerCase()) {
     return false;
   }
-  // Another Windows user's path — only reset if it does not exist on this PC
+  // Another Windows user's path - only reset if it does not exist on this PC
   return !fs.existsSync(resolved);
 }
 

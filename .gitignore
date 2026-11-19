@@ -8,3 +8,9 @@ client/dist/
 server/dist/
 *.log
 .DS_Store
+
+# Secrets: never commit (copy .env.example to .env instead)
+.env
+.env.*
+!.env.example
+!.env.laptop.example

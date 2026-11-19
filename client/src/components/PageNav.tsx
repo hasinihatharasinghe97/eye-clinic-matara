@@ -5,13 +5,14 @@ export type Crumb = {
 
 type Props = {
   crumbs: Crumb[];
-  /** Where the Back button goes. Defaults to previous crumb with an href, else Dashboard. */
+  /** Where Back goes. Defaults to the previous crumb with an href, else the patient list. */
   backTo?: string;
   onNavigate: (to: string) => void;
   /** Optional hint under the trail (e.g. patient OPD). */
   subtitle?: string;
 };
 
+/** Slim "‹ Back | Patients › Name › Visits" line at the top of inner pages. */
 export function PageNav({ crumbs, backTo, onNavigate, subtitle }: Props) {
   const parent = [...crumbs].reverse().find((c) => c.href);
   const target = backTo ?? parent?.href ?? '/';
@@ -21,12 +22,8 @@ export function PageNav({ crumbs, backTo, onNavigate, subtitle }: Props) {
     <div className="page-nav">
       <div className="page-nav-row">
         {showBack && (
-          <button
-            type="button"
-            className="btn secondary btn-back"
-            onClick={() => onNavigate(target)}
-          >
-            ← Back
+          <button type="button" className="page-back" onClick={() => onNavigate(target)}>
+            <span aria-hidden="true">‹</span> Back
           </button>
         )}
         <nav className="breadcrumbs" aria-label="Breadcrumb">
@@ -35,7 +32,11 @@ export function PageNav({ crumbs, backTo, onNavigate, subtitle }: Props) {
               const isLast = i === crumbs.length - 1;
               return (
                 <li key={`${c.label}-${i}`}>
-                  {i > 0 && <span className="crumb-sep" aria-hidden="true">/</span>}
+                  {i > 0 && (
+                    <span className="crumb-sep" aria-hidden="true">
+                      ›
+                    </span>
+                  )}
                   {c.href && !isLast ? (
                     <a
                       href={`#${c.href === '/' ? '/' : c.href}`}
@@ -47,7 +48,10 @@ export function PageNav({ crumbs, backTo, onNavigate, subtitle }: Props) {
                       {c.label}
                     </a>
                   ) : (
-                    <span className={isLast ? 'crumb-current' : undefined} aria-current={isLast ? 'page' : undefined}>
+                    <span
+                      className={isLast ? 'crumb-current' : undefined}
+                      aria-current={isLast ? 'page' : undefined}
+                    >
                       {c.label}
                     </span>
                   )}
@@ -58,39 +62,6 @@ export function PageNav({ crumbs, backTo, onNavigate, subtitle }: Props) {
         </nav>
       </div>
       {subtitle && <p className="page-nav-subtitle muted">{subtitle}</p>}
-    </div>
-  );
-}
-
-export function LoadingBlock({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div className="loading-block" role="status" aria-live="polite">
-      <span className="loading-spinner" aria-hidden="true" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-export function EmptyState({
-  title,
-  hint,
-  actionLabel,
-  onAction,
-}: {
-  title: string;
-  hint?: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <div className="empty-state">
-      <p className="empty-state-title">{title}</p>
-      {hint && <p className="muted">{hint}</p>}
-      {actionLabel && onAction && (
-        <button className="btn" type="button" onClick={onAction}>
-          {actionLabel}
-        </button>
-      )}
     </div>
   );
 }

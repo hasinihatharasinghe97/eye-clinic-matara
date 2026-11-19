@@ -16,7 +16,7 @@ export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 200;
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
 
-/** Shape sent to the browser — never includes the hash or token version. */
+/** Shape sent to the browser - never includes the hash or token version. */
 export function publicUser(row) {
   if (!row) return null;
   return {

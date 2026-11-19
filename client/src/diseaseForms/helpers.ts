@@ -83,11 +83,12 @@ export const score = (
   options: Array<{ value: number; label: string }>
 ): FormField => ({ type: 'score', key, label, options });
 
-export const followup = (
-  key: string,
-  label: string,
-  columns: FollowupColumn[]
-): FormField => ({ type: 'followup', key, label, columns });
+export const followup = (key: string, label: string, columns: FollowupColumn[]): FormField => ({
+  type: 'followup',
+  key,
+  label,
+  columns,
+});
 
 export const eyeField = radio('eyeDetail', 'Eye laterality detail', [
   'Right (OD)',
@@ -122,9 +123,19 @@ export function inferInputKind(key: string, label = ''): InputKind {
     return 'date';
   }
   if (
-    ['cmt', 'iop', 'hba1c', 'pma', 'srf', 'srfheight', 'csgs', 'csgsTotal', 'clockhours', 'choroidalthickness', 'htnduration'].includes(
-      k
-    ) ||
+    [
+      'cmt',
+      'iop',
+      'hba1c',
+      'pma',
+      'srf',
+      'srfheight',
+      'csgs',
+      'csgsTotal',
+      'clockhours',
+      'choroidalthickness',
+      'htnduration',
+    ].includes(k) ||
     l.includes('(µm)') ||
     l.includes('µm') ||
     l.includes('mmhg') ||
@@ -193,7 +204,7 @@ export function toDateTimeLocalValue(value: unknown): string {
   // Canonical clinic storage: YYYY-MM-DDTHH:mm:ss+05:30
   const clinic = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2})?\+05:30$/);
   if (clinic) return `${clinic[1]}T${clinic[2]}:${clinic[3]}`;
-  // Already a naive wall-clock value from the form — keep as-is
+  // Already a naive wall-clock value from the form - keep as-is
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(raw)) {
     return raw.slice(0, 16);
   }

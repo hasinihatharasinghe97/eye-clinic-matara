@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { Button, Modal } from '@/components/ui';
 
 export type ConfirmOptions = {
   title?: string;
@@ -58,51 +59,34 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const cancel = useCallback(() => close(false), [close]);
   const api = useMemo<ConfirmApi>(() => ({ confirm }), [confirm]);
 
   return (
     <ConfirmContext.Provider value={api}>
       {children}
-      {pending && (
-        <div
-          className="confirm-overlay"
-          role="presentation"
-          onClick={() => close(false)}
-        >
-          <div
-            className="confirm-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="confirm-title"
-            aria-describedby="confirm-message"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="confirm-title" className="confirm-title">
-              {pending.title}
-            </h2>
-            <p id="confirm-message" className="confirm-message">
-              {pending.message}
-            </p>
-            <div className="confirm-actions">
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => close(false)}
-              >
-                {pending.cancelLabel}
-              </button>
-              <button
-                type="button"
-                className={pending.danger ? 'btn danger' : 'btn'}
-                autoFocus
-                onClick={() => close(true)}
-              >
-                {pending.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={pending !== null}
+        role="alertdialog"
+        title={pending?.title}
+        onClose={cancel}
+        actions={
+          <>
+            <Button variant="secondary" onClick={cancel}>
+              {pending?.cancelLabel}
+            </Button>
+            <Button
+              variant={pending?.danger ? 'danger' : 'primary'}
+              autoFocus
+              onClick={() => close(true)}
+            >
+              {pending?.confirmLabel}
+            </Button>
+          </>
+        }
+      >
+        {pending?.message}
+      </Modal>
     </ConfirmContext.Provider>
   );
 }
