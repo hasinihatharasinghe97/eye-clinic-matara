@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createWriteStream } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import {
   db,
   DATA_DIR,
@@ -34,7 +34,7 @@ function stampName() {
 }
 
 async function collectZipToBuffer() {
-  const archive = archiver('zip', { zlib: { level: 9 } });
+  const archive = new ZipArchive({ zlib: { level: 9 } });
   const pass = new PassThrough();
   const chunks = [];
   pass.on('data', (c) => chunks.push(c));
