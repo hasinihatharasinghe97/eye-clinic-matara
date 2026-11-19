@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { google } from 'googleapis';
 import { getSettings, saveSettings } from './db.js';
 import { clinicTimestamp } from './clinicDate.js';
+import { ENCRYPTED_EXT, isEncryptedBackup } from './backupCrypto.js';
 
 const DRIVE_FILE_PREFIX = 'Nethraloka-Daily-';
 const COLOMBO_TZ = 'Asia/Colombo';
@@ -58,8 +59,8 @@ export function getColomboClock(now = new Date()) {
   };
 }
 
-function dailyFileName(dateKey) {
-  return `${DRIVE_FILE_PREFIX}${dateKey}.zip`;
+function dailyFileName(dateKey, encrypted = false) {
+  return `${DRIVE_FILE_PREFIX}${dateKey}${encrypted ? ENCRYPTED_EXT : '.zip'}`;
 }
 
 async function getDriveClient() {
@@ -93,7 +94,8 @@ export async function uploadBackupBufferToDrive(buffer, { dateKey } = {}) {
 
   const clock = getColomboClock();
   const day = dateKey || clock.dateKey;
-  const zipName = dailyFileName(day);
+  const encrypted = isEncryptedBackup(buffer);
+  const zipName = dailyFileName(day, encrypted);
   const { drive, folderId } = await getDriveClient();
 
   const created = await drive.files.create({
@@ -102,7 +104,7 @@ export async function uploadBackupBufferToDrive(buffer, { dateKey } = {}) {
       parents: [folderId],
     },
     media: {
-      mimeType: 'application/zip',
+      mimeType: encrypted ? 'application/octet-stream' : 'application/zip',
       body: Readable.from(buffer),
     },
     fields: 'id, name, webViewLink',

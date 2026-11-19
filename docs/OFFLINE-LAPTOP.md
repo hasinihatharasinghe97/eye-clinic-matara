@@ -60,7 +60,8 @@ Needs internet for the setup steps.
    - `MYSQL_PASSWORD` — the root password from step 3 (the laptop's own database).
    - `CLOUD_MYSQL_HOST`, `CLOUD_MYSQL_USER`, `CLOUD_MYSQL_PASSWORD` — the HeatWave values the
      online app already uses.
-   - `CLINIC_PASSWORD` — the login password for the app on the laptop.
+   - `CLINIC_PASSWORD` — password for the first `admin` account on the laptop (used once;
+     afterwards add and manage users on the **Users** page).
 6. Run **`start-clinic.bat`** once. It installs what it needs and creates the laptop's empty
    database. Close it after the app opens (Ctrl+C).
 7. Run **`clinic-tools.bat`** and choose **5. First-time copy from cloud**. It copies every
@@ -122,7 +123,7 @@ laptop until it syncs, so keep backing up the laptop too.
 
 ## Notes
 
-- The login password, backup folder and Google Drive settings are **not** synced; the laptop
+- User accounts, backup folder and Google Drive settings are **not** synced; the laptop
   and the online app each keep their own.
 - The app and the background task never sync at the same time (`data\cloud-sync.lock`; a lock
   left by a crash is ignored after 30 minutes).

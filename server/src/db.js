@@ -308,6 +308,21 @@ await exec(`
     value LONGTEXT NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+  CREATE TABLE IF NOT EXISTS app_users (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    full_name VARCHAR(128) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(16) NOT NULL DEFAULT 'staff',
+    active TINYINT(1) NOT NULL DEFAULT 1,
+    token_version INT NOT NULL DEFAULT 1,
+    must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+    last_login_at VARCHAR(64) NULL,
+    created_at VARCHAR(64) NOT NULL,
+    updated_at VARCHAR(64) NOT NULL,
+    UNIQUE KEY uq_app_users_username (username)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
   CREATE TABLE IF NOT EXISTS custom_disease_forms (
     id VARCHAR(128) NOT NULL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
@@ -834,7 +849,6 @@ const SETTINGS_KEY = 'clinic_settings';
 
 function defaultSettings() {
   return {
-    clinicPassword: process.env.CLINIC_PASSWORD || 'clinic123',
     // Empty string = project default (portable across PCs / folder moves)
     backupFolder: process.env.BACKUP_FOLDER || '',
     lastBackupAt: null,
@@ -933,6 +947,29 @@ async function persistSettingsObject(next) {
     .run(SETTINGS_KEY, JSON.stringify(toWrite));
 }
 
+/** Built-in password used only when nothing is stored and CLINIC_PASSWORD is unset. */
+export const FALLBACK_CLINIC_PASSWORD = 'clinic123';
+
+/** Keys older versions used to keep the login password in settings (now in app_users). */
+export const LEGACY_PASSWORD_KEYS = ['clinicPassword', 'clinicPasswordHash'];
+
+/**
+ * The stored settings object exactly as saved (no defaults, legacy keys included).
+ * Used once at startup to move an old clinic password into the app_users table.
+ */
+export async function readRawSettings() {
+  if (!IS_CLOUD && fs.existsSync(SETTINGS_PATH)) {
+    return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
+  }
+  const row = await db.prepare('SELECT value FROM app_settings WHERE `key` = ?').get(SETTINGS_KEY);
+  return row?.value ? JSON.parse(row.value) : null;
+}
+
+/** Overwrite the stored settings object (settings.json and/or MySQL). */
+export async function writeRawSettings(obj) {
+  await persistSettingsObject(obj);
+}
+
 export async function getSettings() {
   const defaults = defaultSettings();
   let loaded = defaults;
@@ -947,8 +984,10 @@ export async function getSettings() {
         loaded = { ...defaults, ...JSON.parse(row.value) };
       }
     }
-  } catch {
-    loaded = defaults;
+  } catch (err) {
+    console.error('[settings] Could not read settings:', err?.message || err);
+    // Could not read settings (e.g. MySQL briefly down): use defaults, persist nothing.
+    return { ...defaults, backupFolder: resolveBackupFolder(defaults.backupFolder) };
   }
 
   const resolved = resolveBackupFolder(loaded.backupFolder);
@@ -963,7 +1002,10 @@ export async function getSettings() {
     }
   }
 
-  return { ...loaded, backupFolder: resolved };
+  const result = { ...loaded, backupFolder: resolved };
+  // Passwords live in app_users now; never hand an old one to the rest of the app.
+  for (const k of LEGACY_PASSWORD_KEYS) delete result[k];
+  return result;
 }
 
 export async function saveSettings(partial) {

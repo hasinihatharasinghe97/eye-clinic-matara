@@ -12,7 +12,27 @@ import {
   isBackupStale,
   runGoogleDriveBackupNow,
 } from '../backup.js';
-import { clearAuthKeyCache, issueToken, passwordMatches } from '../auth.js';
+import {
+  clearFailedAttempts,
+  issueToken,
+  recordFailedAttempt,
+  requireAdmin,
+  safeEqual,
+  tooManyAttempts,
+} from '../auth.js';
+import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  checkPassword,
+  getUserByUsername,
+  publicUser,
+  recordLogin,
+} from '../users.js';
+import {
+  ENCRYPTED_EXT,
+  MIN_BACKUP_PASSWORD_LENGTH,
+  backupPassword,
+} from '../backupCrypto.js';
 import { driveBackupStatus, isGoogleDriveConfigured } from '../googleDriveBackup.js';
 import {
   autoSyncSettings,
@@ -29,7 +49,13 @@ function settingsPayload(s) {
   return {
     backupFolder: s.backupFolder,
     lastBackupAt: s.lastBackupAt,
-    hasPassword: Boolean(s.clinicPassword),
+    minPasswordLength: MIN_PASSWORD_LENGTH,
+    /** Backups are AES-256 encrypted (BACKUP_PASSWORD is set on the server). */
+    backupEncryption: {
+      enabled: Boolean(backupPassword()),
+      weak: Boolean(backupPassword()) && backupPassword().length < MIN_BACKUP_PASSWORD_LENGTH,
+      minLength: MIN_BACKUP_PASSWORD_LENGTH,
+    },
     cloudMode: IS_CLOUD,
     /** This server is the clinic laptop and can sync to the cloud database. */
     cloudSync: isCloudSyncConfigured(),
@@ -53,33 +79,39 @@ router.get('/settings', async (_req, res) => {
   res.json(settingsPayload(s));
 });
 
-router.put('/settings', async (req, res) => {
+/** Clinic-wide settings (backup folder) can only be changed by an administrator. */
+router.put('/settings', requireAdmin, async (req, res) => {
   const body = req.body || {};
   const patch = {};
   if (!IS_CLOUD && typeof body.backupFolder === 'string') {
     patch.backupFolder = body.backupFolder.trim();
   }
-  if (typeof body.clinicPassword === 'string' && body.clinicPassword.length >= 4) {
-    patch.clinicPassword = body.clinicPassword;
-  }
   const next = await saveSettings(patch);
-  if (patch.clinicPassword) clearAuthKeyCache();
   res.json(settingsPayload(next));
 });
 
 router.post('/login', async (req, res) => {
-  const password = String(req.body?.password || '');
-  const settings = await getSettings();
-  if (!passwordMatches(password, settings.clinicPassword)) {
-    return res.status(401).json({ error: 'Incorrect password' });
+  if (tooManyAttempts(req, res)) return;
+  const username = String(req.body?.username || '').slice(0, 64);
+  const password = String(req.body?.password || '').slice(0, MAX_PASSWORD_LENGTH);
+  const user = await getUserByUsername(username);
+  // Same message and timing whether the username exists or not.
+  const ok = (await checkPassword(user, password)) && Boolean(user?.active);
+  if (!ok) {
+    recordFailedAttempt(req);
+    console.warn(`[auth] Failed login for "${username.replace(/[^\w.@-]/g, '?')}" from ${req.ip}`);
+    return res.status(401).json({ error: 'Incorrect username or password' });
   }
-  const { token, expiresAt } = await issueToken();
-  res.json({ ok: true, token, expiresAt });
+  clearFailedAttempts(req);
+  await recordLogin(user.id);
+  console.log(`[auth] ${user.username} signed in from ${req.ip}`);
+  const { token, expiresAt } = await issueToken(user);
+  res.json({ ok: true, token, expiresAt, user: publicUser(user) });
 });
 
 /** Only reachable with a valid token (requireAuth); the client calls it on startup. */
-router.get('/session', (_req, res) => {
-  res.json({ ok: true });
+router.get('/session', (req, res) => {
+  res.json({ ok: true, user: req.user });
 });
 
 router.post('/backup', async (_req, res) => {
@@ -125,8 +157,9 @@ router.post('/cron/drive-backup', async (req, res) => {
       error: 'BACKUP_CRON_SECRET is not set on the server',
     });
   }
-  const provided = String(req.get('X-Cron-Secret') || req.query.secret || '').trim();
-  if (!provided || provided !== expected) {
+  // Header only: secrets in the URL end up in proxy and access logs.
+  const provided = String(req.get('X-Cron-Secret') || '').trim();
+  if (!provided || !safeEqual(provided, expected)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -178,6 +211,16 @@ router.post('/cloud-sync', (req, res) => {
   res.status(202).json({ started: true });
 });
 
+function sendBackupFile(res, file) {
+  const name = String(file.zipName).replace(/[^\w.-]/g, '_');
+  res.setHeader(
+    'Content-Type',
+    name.endsWith(ENCRYPTED_EXT) ? 'application/octet-stream' : 'application/zip'
+  );
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  res.send(file.buffer);
+}
+
 router.get('/backups', async (_req, res) => {
   try {
     res.json(await listBackups());
@@ -192,9 +235,7 @@ router.get('/backups/latest/download', async (_req, res) => {
     if (!list.length) return res.status(404).json({ error: 'No backups found' });
     const file = await getBackupBuffer(list[0].id);
     if (!file) return res.status(404).json({ error: 'Backup file missing' });
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${file.zipName}"`);
-    res.send(file.buffer);
+    sendBackupFile(res, file);
   } catch (err) {
     res.status(500).json({ error: err.message || 'Download failed' });
   }
@@ -204,9 +245,7 @@ router.get('/backups/:id/download', async (req, res) => {
   try {
     const file = await getBackupBuffer(req.params.id);
     if (!file) return res.status(404).json({ error: 'Backup not found' });
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${file.zipName}"`);
-    res.send(file.buffer);
+    sendBackupFile(res, file);
   } catch (err) {
     res.status(500).json({ error: err.message || 'Download failed' });
   }

@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import multer from 'multer';
 import db, { storeUploadFile, deleteUploadFile, getPatientOpd } from '../db.js';
@@ -22,6 +21,27 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+/**
+ * Identify the file from its first bytes ("magic numbers"). Anything that isn't a real
+ * JPEG, PNG, GIF, WebP or PDF (HTML, SVG, scripts renamed to .png, …) is rejected.
+ */
+function detectFileType(buf) {
+  if (!buf || buf.length < 12) return null;
+  const hex = buf.subarray(0, 12).toString('hex');
+  if (hex.startsWith('ffd8ff')) return { ext: '.jpg', mime: 'image/jpeg' };
+  if (hex.startsWith('89504e470d0a1a0a')) return { ext: '.png', mime: 'image/png' };
+  if (hex.startsWith('474946383761') || hex.startsWith('474946383961')) {
+    return { ext: '.gif', mime: 'image/gif' };
+  }
+  if (hex.startsWith('52494646') && buf.subarray(8, 12).toString('latin1') === 'WEBP') {
+    return { ext: '.webp', mime: 'image/webp' };
+  }
+  if (buf.subarray(0, 5).toString('latin1') === '%PDF-') {
+    return { ext: '.pdf', mime: 'application/pdf' };
+  }
+  return null;
+}
 
 function mapAttachment(row) {
   if (!row) return null;
@@ -69,9 +89,14 @@ router.post('/', (req, res) => {
         .get(req.params.patientId);
       if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
+      // Trust the file's actual bytes, not the browser-supplied name or MIME type.
+      const detected = detectFileType(req.file.buffer);
+      if (!detected) {
+        return res.status(400).json({ error: 'Only JPEG, PNG, WebP, GIF images and PDF reports are allowed' });
+      }
+
       const ts = now();
-      const ext = path.extname(req.file.originalname) || '';
-      const filename = `${randomUUID()}${ext}`;
+      const filename = `${randomUUID()}${detected.ext}`;
       const relativePath = `${req.params.patientId}/${filename}`;
       const visitId = req.body.visitId || null;
 
@@ -97,8 +122,8 @@ router.post('/', (req, res) => {
           opdAdNo,
           visitId,
           relativePath,
-          req.file.originalname,
-          req.file.mimetype,
+          String(req.file.originalname || 'file').replace(/[\u0000-\u001f<>"\\/]/g, '_').slice(0, 200),
+          detected.mime,
           ts
         );
 
@@ -106,7 +131,8 @@ router.post('/', (req, res) => {
       const row = await db.prepare('SELECT * FROM attachments WHERE id = ?').get(result.insertId);
       res.status(201).json(mapAttachment(row));
     } catch (e) {
-      res.status(500).json({ error: e.message || 'Upload failed' });
+      console.error('[upload] failed:', e);
+      res.status(500).json({ error: 'Upload failed. Please try again.' });
     }
   });
 });

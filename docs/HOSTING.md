@@ -63,7 +63,7 @@ Environment variables:
 | `MYSQL_DATABASE` | `eye_clinic` |
 | `MYSQL_SSL` | `1` |
 | `STORE_FILES_IN_DB` | `1` |
-| `CLINIC_PASSWORD` | clinic login password |
+| `CLINIC_PASSWORD` | password for the first `admin` account (used once; then manage users in the app) |
 | `NODE_ENV` | `production` |
 | `NODE_VERSION` | `22` |
 

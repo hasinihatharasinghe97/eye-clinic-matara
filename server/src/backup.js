@@ -21,6 +21,12 @@ import {
   shouldRunDailyDriveUpload,
 } from './googleDriveBackup.js';
 import { clinicClock, clinicTimestamp, toClinicSortableDate } from './clinicDate.js';
+import {
+  ENCRYPTED_EXT,
+  backupPassword,
+  encryptBackup,
+  isBackupFileName,
+} from './backupCrypto.js';
 
 /** How many ZIP backups to keep. Cloud default is lower to save MySQL disk. */
 const KEEP_BACKUPS = Number(process.env.BACKUP_KEEP || (IS_CLOUD ? 7 : 14)) || 14;
@@ -75,7 +81,7 @@ async function collectZipToBuffer() {
         settings: {
           backupFolder: settings.backupFolder,
           lastBackupAt: settings.lastBackupAt,
-          hasPassword: Boolean(settings.clinicPassword),
+          userAccounts: true,
         },
       },
       null,
@@ -139,7 +145,7 @@ async function pruneOldBackups() {
   if (!fs.existsSync(BACKUPS_DIR)) return;
   const files = fs
     .readdirSync(BACKUPS_DIR)
-    .filter((f) => f.startsWith('EyeClinic-Backup-') && f.endsWith('.zip'))
+    .filter((f) => isBackupFileName(f))
     .map((f) => ({
       name: f,
       mtime: fs.statSync(path.join(BACKUPS_DIR, f)).mtimeMs,
@@ -154,8 +160,16 @@ async function pruneOldBackups() {
  * Creates a ZIP backup. Returns metadata + optional buffer for download.
  */
 export async function createBackup({ persist = true } = {}) {
-  const zipName = stampName();
-  const buffer = await collectZipToBuffer();
+  let zipName = stampName();
+  let buffer = await collectZipToBuffer();
+  // Backups hold every patient record: encrypt them whenever BACKUP_PASSWORD is set,
+  // so a copied USB stick, Drive file or database dump can't be read without it.
+  const password = backupPassword();
+  const encrypted = Boolean(password);
+  if (encrypted) {
+    buffer = encryptBackup(buffer, password);
+    zipName = zipName.replace(/\.zip$/, ENCRYPTED_EXT);
+  }
   const createdAt = clinicTimestamp();
 
   if (persist) {
@@ -179,7 +193,7 @@ export async function createBackup({ persist = true } = {}) {
     await saveSettings({ lastBackupAt: createdAt });
   }
 
-  return { zipName, createdAt, buffer, size: buffer.length };
+  return { zipName, createdAt, buffer, size: buffer.length, encrypted };
 }
 
 export async function listBackups() {
@@ -201,7 +215,7 @@ export async function listBackups() {
   if (!fs.existsSync(folder)) return [];
   return fs
     .readdirSync(folder)
-    .filter((f) => f.startsWith('EyeClinic-Backup-') && f.endsWith('.zip'))
+    .filter((f) => isBackupFileName(f))
     .map((f) => {
       const full = path.join(folder, f);
       const st = fs.statSync(full);
@@ -226,7 +240,8 @@ export async function getBackupBuffer(id) {
   }
   const settings = await getSettings();
   const folder = settings.backupFolder || BACKUPS_DIR;
-  const safe = path.basename(id);
+  const safe = path.basename(String(id));
+  if (!isBackupFileName(safe)) return null;
   const full = path.join(folder, safe);
   if (!fs.existsSync(full)) return null;
   return { zipName: safe, buffer: fs.readFileSync(full) };

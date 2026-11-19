@@ -12,6 +12,9 @@
  *   $env:STORE_FILES_IN_DB="1"   # cloud / Oracle HeatWave via Render
  *   node scripts/restore-from-backup.mjs .\EyeClinic-Backup-....zip
  *
+ * Encrypted backups (.zip.enc) work the same way; the password comes from
+ * BACKUP_PASSWORD (environment or .env) or you are asked for it.
+ *
  * Or after unzipping:
  *   node scripts/restore-from-backup.mjs .\extracted-folder
  */
@@ -23,11 +26,30 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const input = process.argv[2] ? path.resolve(process.argv[2]) : null;
+let input = process.argv[2] ? path.resolve(process.argv[2]) : null;
 
 if (!input || !fs.existsSync(input)) {
-  console.error('Usage: node scripts/restore-from-backup.mjs <backup.zip|folder|snapshot.json>');
+  console.error(
+    'Usage: node scripts/restore-from-backup.mjs <backup.zip|backup.zip.enc|folder|snapshot.json>'
+  );
   process.exit(1);
+}
+
+// Encrypted backup (.zip.enc): decrypt to a private temp ZIP first, deleted on exit.
+if (fs.statSync(input).isFile() && input.toLowerCase().endsWith('.enc')) {
+  const { decryptBackup } = await import('../server/src/backupCrypto.js');
+  const { resolveBackupPassword } = await import('./backupPassword.mjs');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eye-clinic-decrypt-'));
+  process.on('exit', () => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  try {
+    const zip = decryptBackup(fs.readFileSync(input), await resolveBackupPassword());
+    input = path.join(tmpDir, 'backup.zip');
+    fs.writeFileSync(input, zip, { mode: 0o600 });
+    console.log('Backup decrypted.');
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
 }
 
 function findSnapshot(dir) {

@@ -21,8 +21,8 @@ Runs in two places that share the same records:
 1. Copy `.env.laptop.example` (offline laptop) or `.env.example` (PC using HeatWave directly) to
    `.env` and fill it in.
 2. Double-click **`start-clinic.bat`** (first run installs dependencies).
-3. Open **http://localhost:5173** and sign in (password from `.env` `CLINIC_PASSWORD`, or change
-   it under **Backup & Settings**).
+3. Open **http://localhost:5173** and sign in as `admin` (first time: the password from
+   `.env` `CLINIC_PASSWORD`). Then add each person under **Users**.
 
 Or from a terminal:
 
@@ -70,11 +70,43 @@ npm run dev
 3. Restore into an empty database with `npm run restore:backup -- <zip>`
    (`STORE_FILES_IN_DB=1` for HeatWave).
 
-## Login password
+## User accounts
 
-- Set `CLINIC_PASSWORD` on Render and in the local `.env`.
-- Change it anytime under **Backup & Settings**.
-- Do not share the password in screenshots or public docs.
+- Everyone signs in with their **own username and password**. Accounts live in the MySQL
+  table `app_users`; passwords are stored only as scrypt hashes — never in a file.
+- **First start:** an `admin` account is created automatically using the old clinic
+  password (or `CLINIC_PASSWORD` on a fresh install; if neither exists, the default
+  `clinic123`, which must be changed at first sign-in). The old password is then removed
+  from `settings.json`.
+- **Users** page (administrators): add people, choose Staff or Administrator, reset a
+  forgotten password (they must pick a new one at next sign-in), disable or delete accounts.
+  There is always at least one active administrator.
+- **My account** (everyone): change your own password (needs the current one, 8+ characters).
+  Changing, resetting or disabling signs that person out on every device.
+- The laptop and the online (Render) app each have their own user list — cloud sync copies
+  patient data only, not accounts.
+- Do not share passwords, or one account between people.
+
+## Security
+
+- **Login protection:** after 5 wrong passwords a device is locked out for 1 minute,
+  doubling each time (up to 1 hour). Failed logins are written to the server log.
+- **Uploads:** only real JPEG, PNG, WebP, GIF and PDF files are accepted (checked by
+  their content, not the file name), and they are served so they can never run as a page.
+- **Browser protections:** strict Content-Security-Policy, no caching of patient data,
+  no referrer leaks, clickjacking protection, HTTPS-only (HSTS) on Render.
+- **Other websites** cannot call the API. To allow one, set `CORS_ORIGINS` (comma-separated).
+- Set a long random `AUTH_SECRET` on Render (render.yaml generates one) and on the laptop.
+- Behind a reverse proxy other than Render, set `TRUST_PROXY=1` so lockouts use the real IP.
+- **Auto sign-out:** after 8 hours with no activity the app warns for 60 seconds, then
+  signs out. Signing out in one browser tab signs out all tabs.
+- **Encrypted backups:** set `BACKUP_PASSWORD` (12+ characters) in `.env` and on Render.
+  Backups are then AES-256 encrypted and saved as `.zip.enc` (local, HeatWave and Google
+  Drive). **Keep a copy of this password somewhere safe, away from the clinic computer —
+  without it the backups cannot be opened.**
+  - Open one: `node scripts/decrypt-backup.mjs EyeClinic-Backup-….zip.enc`
+  - Restore one: `node scripts/restore-from-backup.mjs EyeClinic-Backup-….zip.enc`
+  - Both read `BACKUP_PASSWORD` from `.env`, or ask for it.
 
 ## Project layout
 

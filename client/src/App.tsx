@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
   AUTH_EXPIRED_EVENT,
   isLoggedIn,
   localClinicDate,
   setToken,
+  TOKEN_STORAGE_KEY,
+  type AppUser,
   type Patient,
   type SystemSettings,
 } from './api';
+import { IDLE_LOGOUT_LABEL, useIdleLogout } from './useIdleLogout';
+import { ChangePasswordForm, UsersPage } from './pages/UsersPage';
+
+/** sessionStorage key telling the login screen why the user was signed out. */
+const SIGNOUT_REASON_KEY = 'eye-clinic-signout-reason';
 import { PatientForm } from './pages/PatientForm';
 import { PatientDetail } from './pages/PatientDetail';
 import { VisitForm } from './pages/VisitForm';
@@ -34,7 +41,8 @@ type Route =
   | { name: 'backup' }
   | { name: 'stats' }
   | { name: 'daily' }
-  | { name: 'forms' };
+  | { name: 'forms' }
+  | { name: 'users' };
 
 const TAB_LABELS: Record<string, string> = {
   visits: 'Visits',
@@ -93,6 +101,7 @@ function parseRoute(): Route {
   if (parts[0] === 'stats') return { name: 'stats' };
   if (parts[0] === 'daily') return { name: 'daily' };
   if (parts[0] === 'forms') return { name: 'forms' };
+  if (parts[0] === 'users') return { name: 'users' };
   return { name: 'dashboard' };
 }
 
@@ -196,23 +205,36 @@ function buildCrumbs(route: Route, patientName: string | null): { crumbs: Crumb[
       return { crumbs: [patients, { label: 'Backup & Settings' }], backTo: '/' };
     case 'forms':
       return { crumbs: [patients, { label: 'Disease form builder' }], backTo: '/' };
+    case 'users':
+      return { crumbs: [patients, { label: 'Users & account' }], backTo: '/' };
     default:
       return { crumbs: [patients] };
   }
 }
 
-function LoginScreen({ onLogin }: { onLogin: () => void }) {
+function LoginScreen({ onLogin }: { onLogin: (user: AppUser) => void }) {
   const toast = useToast();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [idleNotice] = useState(() => {
+    try {
+      const reason = sessionStorage.getItem(SIGNOUT_REASON_KEY);
+      sessionStorage.removeItem(SIGNOUT_REASON_KEY);
+      return reason === 'idle';
+    } catch {
+      return false;
+    }
+  });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      const res = await api.login(password);
+      const res = await api.login(username.trim(), password);
       setToken(res.token);
-      onLogin();
+      setPassword('');
+      onLogin(res.user);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -225,14 +247,33 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       <form className="login-card" onSubmit={submit}>
         <h1>Nethraloka Ayurvedic Eye Clinic</h1>
         <p className="muted">Sign in to continue</p>
+        {idleNotice && (
+          <p className="login-notice" role="status">
+            You were signed out after {IDLE_LOGOUT_LABEL} without activity, to keep patient
+            records private.
+          </p>
+        )}
         <div className="field" style={{ marginTop: '1rem' }}>
-          <label htmlFor="password">Clinic password</label>
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            autoFocus
+            required
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
           <input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoFocus
+            autoComplete="current-password"
             required
           />
         </div>
@@ -240,6 +281,33 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+    </div>
+  );
+}
+
+/** Shown after signing in with a temporary password: nothing else works until it's changed. */
+function ForcePasswordChange({
+  user,
+  onChanged,
+  onSignOut,
+}: {
+  user: AppUser;
+  onChanged: (u: AppUser) => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <h1>Choose your password</h1>
+        <p className="muted">
+          Welcome, {user.fullName}. You signed in with a temporary password — choose your own to
+          continue. Don&apos;t share it with anyone.
+        </p>
+        <ChangePasswordForm onChanged={onChanged} submitLabel="Save and continue" />
+        <button type="button" className="linkish" onClick={onSignOut} style={{ marginTop: '0.75rem' }}>
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }
@@ -549,8 +617,8 @@ export default function App() {
   const [auth, setAuth] = useState<'checking' | 'in' | 'out'>(() =>
     isLoggedIn() ? 'checking' : 'out'
   );
-  const authed = auth === 'in';
-  const setAuthed = (ok: boolean) => setAuth(ok ? 'in' : 'out');
+  const [me, setMe] = useState<AppUser | null>(null);
+  const authed = auth === 'in' && me !== null;
   const [route, setRoute] = useState<Route>(parseRoute);
   const [patientName, setPatientName] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -561,7 +629,11 @@ export default function App() {
     let cancelled = false;
     api
       .checkSession()
-      .then(() => !cancelled && setAuth('in'))
+      .then((s) => {
+        if (cancelled) return;
+        setMe(s.user);
+        setAuth('in');
+      })
       .catch(() => !cancelled && setAuth('out'));
     return () => {
       cancelled = true;
@@ -571,7 +643,32 @@ export default function App() {
   useEffect(() => {
     const onExpired = () => setAuth('out');
     window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
-    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    // Signing out (or idle sign-out) in one tab signs out every open tab.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === TOKEN_STORAGE_KEY && !e.newValue) setAuth('out');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  const signOutIdle = useCallback(() => {
+    setToken(null);
+    try {
+      sessionStorage.setItem(SIGNOUT_REASON_KEY, 'idle');
+    } catch {
+      /* ignore */
+    }
+    setAuth('out');
+  }, []);
+  const idle = useIdleLogout(authed, signOutIdle);
+
+  const signOut = useCallback(() => {
+    setToken(null);
+    setMe(null);
+    setAuth('out');
   }, []);
 
   useEffect(() => {
@@ -614,8 +711,19 @@ export default function App() {
     );
   }
 
-  if (!authed) {
-    return <LoginScreen onLogin={() => setAuthed(true)} />;
+  if (!authed || !me) {
+    return (
+      <LoginScreen
+        onLogin={(user) => {
+          setMe(user);
+          setAuth('in');
+        }}
+      />
+    );
+  }
+
+  if (me.mustChangePassword) {
+    return <ForcePasswordChange user={me} onChanged={setMe} onSignOut={signOut} />;
   }
 
   return (
@@ -700,16 +808,28 @@ export default function App() {
           >
             Backup &amp; Settings
           </a>
+          <a
+            href="#/users"
+            className={route.name === 'users' ? 'active' : ''}
+            title={`Signed in as ${me.fullName}`}
+            onClick={(e) => {
+              e.preventDefault();
+              setNavOpen(false);
+              navigate('/users');
+            }}
+          >
+            {me.role === 'admin' ? 'Users' : 'My account'}
+          </a>
           <button
             type="button"
             className="linkish"
+            title={`Signed in as ${me.fullName} (${me.username})`}
             onClick={() => {
               setNavOpen(false);
-              setToken(null);
-              setAuthed(false);
+              signOut();
             }}
           >
-            Sign out
+            Sign out ({me.username})
           </button>
         </nav>
       </header>
@@ -777,8 +897,29 @@ export default function App() {
           onCancel={() => navigate(`/patients/${route.patientId}/diseases`)}
         />
       )}
-      {route.name === 'backup' && <BackupPage />}
+      {route.name === 'backup' && <BackupPage isAdmin={me.role === 'admin'} />}
+      {route.name === 'users' && <UsersPage me={me} onMeChanged={setMe} />}
       {route.name === 'forms' && <FormBuilderPage onNavigate={navigate} />}
+      {idle.secondsLeft !== null && (
+        <div className="idle-overlay" data-idle-warning role="alertdialog" aria-modal="true" aria-labelledby="idle-title">
+          <div className="idle-card">
+            <h3 id="idle-title">Still there?</h3>
+            <p>
+              For patient privacy you will be signed out in <strong>{idle.secondsLeft}</strong>{' '}
+              second{idle.secondsLeft === 1 ? '' : 's'} because nobody has used the app for{' '}
+              {IDLE_LOGOUT_LABEL}. Save any open form to keep your changes.
+            </p>
+            <div className="row">
+              <button className="btn" type="button" onClick={idle.stayActive} autoFocus>
+                Stay signed in
+              </button>
+              <button className="btn secondary" type="button" onClick={signOutIdle}>
+                Sign out now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

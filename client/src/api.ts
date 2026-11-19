@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'eye-clinic-token';
+export const TOKEN_STORAGE_KEY = TOKEN_KEY;
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -360,10 +361,24 @@ export type CustomDiseaseForm = {
   updatedAt?: string;
 };
 
+export type UserRole = 'admin' | 'staff';
+
+export type AppUser = {
+  id: number;
+  username: string;
+  fullName: string;
+  role: UserRole;
+  active: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+};
+
 export type SystemSettings = {
   backupFolder: string;
   lastBackupAt: string | null;
-  hasPassword: boolean;
+  minPasswordLength?: number;
+  backupEncryption?: { enabled: boolean; weak: boolean; minLength: number };
   cloudMode?: boolean;
   /** This server is the clinic laptop and can sync to the cloud database. */
   cloudSync?: boolean;
@@ -439,14 +454,50 @@ export type BackupInfo = {
 };
 
 export const api = {
-  login: (password: string) =>
-    request<{ ok: boolean; token: string }>('/api/system/login', {
+  login: (username: string, password: string) =>
+    request<{ ok: boolean; token: string; user: AppUser }>('/api/system/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     }),
 
-  checkSession: () => request<{ ok: boolean }>('/api/system/session'),
+  checkSession: () => request<{ ok: boolean; user: AppUser }>('/api/system/session'),
+
+  /** Change your own password; keeps this device signed in with a fresh token. */
+  changeMyPassword: async (currentPassword: string, newPassword: string) => {
+    const res = await request<{ ok: boolean; token: string; user: AppUser }>('/api/users/me/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    setToken(res.token);
+    return res.user;
+  },
+
+  listUsers: () => request<AppUser[]>('/api/users'),
+
+  createUser: (body: { username: string; fullName: string; password: string; role: UserRole }) =>
+    request<AppUser>('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  updateUser: (id: number, body: { fullName?: string; role?: UserRole; active?: boolean }) =>
+    request<AppUser>(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  resetUserPassword: (id: number, newPassword: string) =>
+    request<AppUser>(`/api/users/${id}/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword }),
+    }),
+
+  deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
 
   getSettings: () => request<SystemSettings>('/api/system/settings'),
 
@@ -459,7 +510,7 @@ export const api = {
       body: JSON.stringify({ force }),
     }),
 
-  updateSettings: (body: { backupFolder?: string; clinicPassword?: string }) =>
+  updateSettings: (body: { backupFolder?: string }) =>
     request<SystemSettings>('/api/system/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

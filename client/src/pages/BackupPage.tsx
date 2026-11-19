@@ -10,11 +10,10 @@ function formatSize(n?: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function BackupPage() {
+export function BackupPage({ isAdmin }: { isAdmin: boolean }) {
   const toast = useToast();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [backupFolder, setBackupFolder] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -35,13 +34,9 @@ export function BackupPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      const body: { backupFolder?: string; clinicPassword?: string } = {};
-      if (!settings?.cloudMode) body.backupFolder = backupFolder;
-      if (newPassword.trim()) body.clinicPassword = newPassword.trim();
-      const s = await api.updateSettings(body);
+      const s = await api.updateSettings({ backupFolder });
       setSettings(s);
       setBackupFolder(s.backupFolder);
-      setNewPassword('');
       toast.success('Settings saved.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save settings');
@@ -53,7 +48,7 @@ export function BackupPage() {
   async function runBackup() {
     setBusy(true);
     try {
-      if (!settings?.cloudMode && backupFolder !== settings?.backupFolder) {
+      if (isAdmin && !settings?.cloudMode && backupFolder !== settings?.backupFolder) {
         await api.updateSettings({ backupFolder });
       }
       const result = await api.backup();
@@ -127,6 +122,29 @@ export function BackupPage() {
             offsite copy.
           </p>
         )}
+        {settings?.backupEncryption &&
+          (settings.backupEncryption.enabled ? (
+            <p className="muted">
+              🔒 <strong>Backups are encrypted</strong> (AES-256). Files end in{' '}
+              <code>.zip.enc</code> and can only be opened with the backup password — keep a copy of
+              it somewhere safe, away from this computer. To open one:{' '}
+              <code>node scripts/decrypt-backup.mjs &lt;file&gt;</code>
+              {settings.backupEncryption.weak && (
+                <span className="error">
+                  {' '}
+                  — the backup password is short; use at least {settings.backupEncryption.minLength}{' '}
+                  characters.
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="error">
+              ⚠ Backups are <strong>not encrypted</strong>. Anyone with a copy of a backup ZIP can
+              read every patient record. Set <code>BACKUP_PASSWORD</code> (at least{' '}
+              {settings.backupEncryption.minLength} characters) in the server’s <code>.env</code>
+              {cloud ? ' and in Render’s environment variables' : ''}, then restart the app.
+            </p>
+          ))}
         <p className="muted">
           Last HeatWave/local backup:{' '}
           {settings?.lastBackupAt ? new Date(settings.lastBackupAt).toLocaleString() : 'Never'}
@@ -337,8 +355,9 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
         )}
       </div>
 
+      {!cloud && isAdmin && (
       <form className="card" onSubmit={saveSettings}>
-        {!cloud && (
+        {(
           <>
             <h3>Backup destination folder</h3>
             <p className="muted">
@@ -363,28 +382,11 @@ node scripts/restore-from-backup.mjs .\\EyeClinic-Backup-....zip`}
           </>
         )}
 
-        <h3 className={cloud ? undefined : 'section-title'}>Change clinic password</h3>
-        {cloud && (
-          <p className="muted" style={{ marginTop: 0 }}>
-            This password protects the Render website login. It is separate from the Oracle HeatWave
-            MySQL password (set in OCI / Render env vars).
-          </p>
-        )}
-        <div className="field">
-          <label>New password (leave blank to keep current)</label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            minLength={4}
-            placeholder="At least 4 characters"
-          />
-        </div>
-
         <button className="btn secondary" type="submit" disabled={busy} style={{ marginTop: '0.75rem' }}>
           Save settings
         </button>
       </form>
+      )}
     </>
   );
 }
