@@ -715,6 +715,8 @@ export default function App() {
     return (
       <LoginScreen
         onLogin={(user) => {
+          // Always start on the patient list after signing in, not the page used last time.
+          navigate('/');
           setMe(user);
           setAuth('in');
         }}
@@ -723,7 +725,16 @@ export default function App() {
   }
 
   if (me.mustChangePassword) {
-    return <ForcePasswordChange user={me} onChanged={setMe} onSignOut={signOut} />;
+    return (
+      <ForcePasswordChange
+        user={me}
+        onChanged={(u) => {
+          navigate('/');
+          setMe(u);
+        }}
+        onSignOut={signOut}
+      />
+    );
   }
 
   return (
